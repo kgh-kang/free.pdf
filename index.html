@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>진짜무료PDF — 합치기 · 텍스트 추출</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 배경 그라데이션 오브 */
+        .bg-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.3;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .bg-orb-1 {
+            width: 500px; height: 500px;
+            background: #6366f1;
+            top: -150px; left: -100px;
+        }
+        .bg-orb-2 {
+            width: 400px; height: 400px;
+            background: #ec4899;
+            bottom: -100px; right: -100px;
+        }
+        .bg-orb-3 {
+            width: 300px; height: 300px;
+            background: #06b6d4;
+            top: 50%; left: 60%;
+        }
+
+        .container {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 48px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 헤더 */
+        header { text-align: center; margin-bottom: 40px; }
+        header h1 {
+            font-size: 36px; font-weight: 800;
+            background: linear-gradient(135deg, #818cf8, #c084fc, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
+        }
+        header p { font-size: 15px; color: #888; font-weight: 400; }
+
+        .badge-row {
+            display: flex; justify-content: center; gap: 10px;
+            margin-top: 20px; flex-wrap: wrap;
+        }
+        .badge {
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            padding: 6px 14px; border-radius: 20px;
+            font-size: 12px; font-weight: 600;
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            backdrop-filter: blur(8px);
+        }
+
+        /* 글래스 카드 */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            padding: 32px;
+        }
+
+        /* 탭 */
+        .tabs {
+            display: flex; gap: 4px; margin-bottom: 28px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 14px; padding: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .tab {
+            flex: 1; padding: 12px; text-align: center;
+            border: none; background: none; border-radius: 10px;
+            font-size: 14px; font-weight: 600; color: #777;
+            cursor: pointer; transition: all 0.3s;
+            font-family: inherit;
+        }
+        .tab:hover { color: #bbb; }
+        .tab.active {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* 드롭존 */
+        .drop-zone {
+            border: 2px dashed rgba(139, 92, 246, 0.3);
+            border-radius: 16px;
+            padding: 56px 20px; text-align: center;
+            background: rgba(139, 92, 246, 0.04);
+            cursor: pointer; transition: all 0.3s;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .drop-zone::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(circle at center, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .drop-zone:hover::before, .drop-zone.drag-over::before { opacity: 1; }
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: rgba(139, 92, 246, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.15);
+        }
+        .drop-zone-icon {
+            font-size: 44px; margin-bottom: 14px;
+            filter: grayscale(0.2);
+        }
+        .drop-zone-text {
+            font-size: 15px; color: #aaa; margin-bottom: 6px; font-weight: 500;
+        }
+        .drop-zone-sub { font-size: 13px; color: #666; }
+
+        input[type="file"] { display: none; }
+
+        /* 파일 리스트 */
+        .file-list { list-style: none; margin-bottom: 24px; }
+        .file-item {
+            display: flex; align-items: center;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 14px 16px; margin-bottom: 8px;
+            cursor: grab; transition: all 0.2s;
+        }
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .file-item:active { cursor: grabbing; }
+        .file-item.dragging { opacity: 0.4; transform: scale(0.98); }
+        .file-item.drag-over-item { border-top: 2px solid #8b5cf6; }
+        .file-item-grip { color: #555; margin-right: 14px; font-size: 16px; user-select: none; }
+        .file-item-icon { margin-right: 14px; font-size: 18px; }
+        .file-item-info { flex: 1; min-width: 0; }
+        .file-item-name {
+            font-size: 14px; font-weight: 500; color: #ddd;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .file-item-meta { margin-top: 2px; }
+        .file-item-size { font-size: 12px; color: #666; }
+        .file-item-pages { font-size: 12px; color: #8b5cf6; margin-left: 8px; font-weight: 600; }
+        .file-item-remove {
+            background: none; border: none; color: #555;
+            font-size: 18px; cursor: pointer; padding: 6px 10px;
+            border-radius: 8px; transition: all 0.2s;
+        }
+        .file-item-remove:hover { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+
+        /* 버튼 */
+        .actions { display: flex; gap: 12px; margin-bottom: 16px; }
+        .btn {
+            padding: 14px 28px; border: none; border-radius: 12px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.3s; flex: 1; font-family: inherit;
+            position: relative; overflow: hidden;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 25px rgba(99, 102, 241, 0.45);
+        }
+        .btn-primary:active:not(:disabled) { transform: translateY(0); }
+        .btn-primary:disabled {
+            background: rgba(99, 102, 241, 0.2);
+            color: #666;
+            box-shadow: none; cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.06);
+            color: #aaa;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            flex: 0.4;
+        }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ddd;
+        }
+
+        /* 프로그레스 */
+        .progress-bar {
+            width: 100%; height: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 2px; overflow: hidden;
+            margin-bottom: 24px; display: none;
+        }
+        .progress-bar.active { display: block; }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #c084fc);
+            border-radius: 2px; transition: width 0.3s; width: 0%;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+
+        .status {
+            text-align: center; font-size: 13px; color: #777;
+            margin-bottom: 16px; font-weight: 500;
+        }
+
+        /* 텍스트 추출 결과 */
+        .text-result { display: none; margin-bottom: 24px; }
+        .text-result.active { display: block; }
+        .text-result textarea {
+            width: 100%; min-height: 300px; padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px; line-height: 1.9;
+            resize: vertical;
+            background: rgba(0, 0, 0, 0.3); color: #ccc;
+        }
+        .text-result textarea:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+        .text-actions { display: flex; gap: 12px; margin-top: 16px; }
+
+        /* 푸터 */
+        footer {
+            text-align: center; margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        footer p { font-size: 12px; color: #555; line-height: 1.8; }
+
+        /* 애니메이션 */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .glass-card { animation: fadeInUp 0.6s ease-out; }
+        header { animation: fadeInUp 0.6s ease-out; }
+
+        @media (max-width: 480px) {
+            .container { padding: 24px 16px; }
+            header h1 { font-size: 28px; }
+            .glass-card { padding: 20px; border-radius: 16px; }
+            .drop-zone { padding: 40px 16px; }
+            .actions, .text-actions { flex-direction: column; }
+            .btn-secondary { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="bg-orb bg-orb-3"></div>
+
+    <div class="container">
+        <header>
+            <h1>진짜무료PDF</h1>
+            <p>합치기 &middot; 텍스트 추출</p>
+            <div class="badge-row">
+                <span class="badge">서버 전송 없음</span>
+                <span class="badge">완전 무료</span>
+                <span class="badge">회원가입 불필요</span>
+            </div>
+        </header>
+
+        <div class="glass-card">
+            <!-- 탭 -->
+            <div class="tabs">
+                <button class="tab active" data-tab="merge">합치기</button>
+                <button class="tab" data-tab="extract">텍스트 추출</button>
+            </div>
+
+            <!-- 합치기 -->
+            <div class="tab-content active" id="tab-merge">
+                <div class="drop-zone" id="mergeDropZone">
+                    <div class="drop-zone-icon">📄</div>
+                    <div class="drop-zone-text">PDF 파일을 여기에 드래그하거나 클릭하세요</div>
+                    <div class="drop-zone-sub">여러 파일을 한번에 선택할 수 있습니다</div>
+                </div>
+                <input type="file" id="mergeFileInput" accept=".pdf" multiple>
+                <ul class="file-list" id="mergeFileList"></ul>
+                <div class="progress-bar" id="mergeProgress">
+                    <div class="progress-bar-fill" id="mergeProgressFill"></div>
+                </div>
+                <div class="status" id="mergeStatus"></div>
+                <div class="actions" id="mergeActions" style="display:none;">
+                    <button class="btn btn-secondary" id="mergeClearBtn">전체 삭제</button>
+                    <button class="btn btn-primary" id="mergeBtn">합치기</button>
+                </div>
+            </div>
+
+            <!-- 텍스트 추출 -->
+            <div class="tab-content" id="tab-extract">
+                <div class="drop-zone" id="extractDropZone">
+                    <div class="drop-zone-icon">📝</div>
+                    <div class="drop-zone-text">텍스트를 추출할 PDF 파일을 넣어주세요</div>
+                    <div class="drop-zone-sub">파일 1개를 선택하세요</div>
+                </div>
+                <input type="file" id="extractFileInput" accept=".pdf">
+                <div class="progress-bar" id="extractProgress">
+                    <div class="progress-bar-fill" id="extractProgressFill"></div>
+                </div>
+                <div class="status" id="extractStatus"></div>
+                <div class="text-result" id="textResult">
+                    <textarea id="extractedText" readonly></textarea>
+                    <div class="text-actions">
+                        <button class="btn btn-secondary" id="extractClearBtn">초기화</button>
+                        <button class="btn btn-primary" id="copyBtn">복사하기</button>
+                        <button class="btn btn-primary" id="downloadTxtBtn">TXT 다운로드</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>
+                모든 작업은 브라우저에서만 처리됩니다.<br>
+                파일이 외부 서버로 전송되지 않습니다.
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // 탭 전환
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // 공통
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        function escapeHtml(str) {
+            const d = document.createElement('div'); d.textContent = str; return d.innerHTML;
+        }
+        function setupDropZone(dz, fi, cb) {
+            dz.addEventListener('click', () => fi.click());
+            dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+            dz.addEventListener('drop', e => {
+                e.preventDefault(); dz.classList.remove('drag-over');
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
+                if (files.length) cb(files);
+            });
+            fi.addEventListener('change', e => { cb(Array.from(e.target.files)); fi.value = ''; });
+        }
+
+        // ===== 합치기 =====
+        const mergeDropZone = document.getElementById('mergeDropZone');
+        const mergeFileInput = document.getElementById('mergeFileInput');
+        const mergeFileList = document.getElementById('mergeFileList');
+        const mergeBtn = document.getElementById('mergeBtn');
+        const mergeClearBtn = document.getElementById('mergeClearBtn');
+        const mergeActions = document.getElementById('mergeActions');
+        const mergeProgress = document.getElementById('mergeProgress');
+        const mergeProgressFill = document.getElementById('mergeProgressFill');
+        const mergeStatus = document.getElementById('mergeStatus');
+        let pdfFiles = [], draggedItem = null;
+
+        setupDropZone(mergeDropZone, mergeFileInput, addMergeFiles);
+
+        async function addMergeFiles(files) {
+            for (const file of files) {
+                try {
+                    const ab = await file.arrayBuffer();
+                    const pdf = await PDFLib.PDFDocument.load(ab, { ignoreEncryption: true });
+                    pdfFiles.push({ file, name: file.name, size: file.size, pageCount: pdf.getPageCount(), arrayBuffer: ab });
+                } catch { mergeStatus.textContent = `"${file.name}" 읽기 실패`; }
+            }
+            renderMergeList();
+        }
+
+        function renderMergeList() {
+            mergeFileList.innerHTML = '';
+            if (!pdfFiles.length) { mergeActions.style.display = 'none'; return; }
+            mergeActions.style.display = 'flex';
+            mergeBtn.disabled = pdfFiles.length < 2;
+
+            pdfFiles.forEach((pdf, i) => {
+                const li = document.createElement('li');
+                li.className = 'file-item'; li.draggable = true;
+                li.innerHTML = `
+                    <span class="file-item-grip">⠿</span>
+                    <span class="file-item-icon">📕</span>
+                    <div class="file-item-info">
+                        <div class="file-item-name">${escapeHtml(pdf.name)}</div>
+                        <div class="file-item-meta">
+                            <span class="file-item-size">${formatSize(pdf.size)}</span>
+                            <span class="file-item-pages">${pdf.pageCount}p</span>
+                        </div>
+                    </div>
+                    <button class="file-item-remove">&times;</button>`;
+
+                li.addEventListener('dragstart', e => { draggedItem = i; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+                li.addEventListener('dragend', () => { li.classList.remove('dragging'); document.querySelectorAll('.drag-over-item').forEach(el => el.classList.remove('drag-over-item')); draggedItem = null; });
+                li.addEventListener('dragover', e => { e.preventDefault(); if (draggedItem !== null && draggedItem !== i) li.classList.add('drag-over-item'); });
+                li.addEventListener('dragleave', () => li.classList.remove('drag-over-item'));
+                li.addEventListener('drop', e => {
+                    e.preventDefault(); e.stopPropagation(); li.classList.remove('drag-over-item');
+                    if (draggedItem === null || draggedItem === i) return;
+                    pdfFiles.splice(i, 0, pdfFiles.splice(draggedItem, 1)[0]);
+                    draggedItem = null; renderMergeList();
+                });
+                li.querySelector('.file-item-remove').addEventListener('click', e => { e.stopPropagation(); pdfFiles.splice(i, 1); renderMergeList(); if (!pdfFiles.length) mergeStatus.textContent = ''; });
+                mergeFileList.appendChild(li);
+            });
+            const tp = pdfFiles.reduce((s, f) => s + f.pageCount, 0);
+            mergeStatus.textContent = `${pdfFiles.length}개 파일 · ${tp}페이지`;
+        }
+
+        mergeBtn.addEventListener('click', async () => {
+            if (pdfFiles.length < 2) return;
+            mergeBtn.disabled = true; mergeBtn.textContent = '처리 중...';
+            mergeProgress.classList.add('active'); mergeProgressFill.style.width = '0%';
+            try {
+                const m = await PDFLib.PDFDocument.create();
+                for (let i = 0; i < pdfFiles.length; i++) {
+                    const p = await PDFLib.PDFDocument.load(pdfFiles[i].arrayBuffer, { ignoreEncryption: true });
+                    (await m.copyPages(p, p.getPageIndices())).forEach(pg => m.addPage(pg));
+                    mergeProgressFill.style.width = ((i+1)/pdfFiles.length*100)+'%';
+                }
+                const blob = new Blob([await m.save()], { type: 'application/pdf' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'merged.pdf'; a.click();
+                URL.revokeObjectURL(a.href);
+                mergeStatus.textContent = '완료! 다운로드가 시작됩니다.';
+            } catch (e) { mergeStatus.textContent = '오류: ' + e.message; }
+            finally { mergeBtn.disabled = false; mergeBtn.textContent = '합치기'; setTimeout(() => mergeProgress.classList.remove('active'), 1000); }
+        });
+        mergeClearBtn.addEventListener('click', () => { pdfFiles = []; renderMergeList(); mergeStatus.textContent = ''; });
+
+        // ===== 텍스트 추출 =====
+        const extractDropZone = document.getElementById('extractDropZone');
+        const extractFileInput = document.getElementById('extractFileInput');
+        const extractProgress = document.getElementById('extractProgress');
+        const extractProgressFill = document.getElementById('extractProgressFill');
+        const extractStatus = document.getElementById('extractStatus');
+        const textResult = document.getElementById('textResult');
+        const extractedText = document.getElementById('extractedText');
+        const copyBtn = document.getElementById('copyBtn');
+        const downloadTxtBtn = document.getElementById('downloadTxtBtn');
+        const extractClearBtn = document.getElementById('extractClearBtn');
+        let extractedFileName = '';
+
+        setupDropZone(extractDropZone, extractFileInput, extractText);
+
+        async function extractText(files) {
+            const file = files[0]; if (!file) return;
+            extractedFileName = file.name.replace(/\.pdf$/i, '');
+            extractDropZone.style.display = 'none';
+            extractProgress.classList.add('active'); extractProgressFill.style.width = '0%';
+            extractStatus.textContent = '추출 중...';
+            textResult.classList.remove('active');
+            try {
+                const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                let text = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const c = await page.getTextContent();
+                    const t = c.items.map(x => x.str).join(' ');
+                    if (t.trim()) text += `--- ${i}페이지 ---\n${t.trim()}\n\n`;
+                    extractProgressFill.style.width = (i/pdf.numPages*100)+'%';
+                }
+                if (!text.trim()) {
+                    extractStatus.textContent = '텍스트를 찾을 수 없습니다. 이미지 PDF일 수 있습니다.';
+                    extractDropZone.style.display = '';
+                } else {
+                    extractedText.value = text.trim();
+                    textResult.classList.add('active');
+                    extractStatus.textContent = `${pdf.numPages}페이지에서 추출 완료`;
+                }
+            } catch (e) { extractStatus.textContent = '오류: ' + e.message; extractDropZone.style.display = ''; }
+            finally { setTimeout(() => extractProgress.classList.remove('active'), 500); }
+        }
+
+        copyBtn.addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(extractedText.value); } catch { extractedText.select(); document.execCommand('copy'); }
+            copyBtn.textContent = '복사 완료!'; setTimeout(() => copyBtn.textContent = '복사하기', 1500);
+        });
+        downloadTxtBtn.addEventListener('click', () => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([extractedText.value], { type: 'text/plain;charset=utf-8' }));
+            a.download = extractedFileName + '.txt'; a.click(); URL.revokeObjectURL(a.href);
+        });
+        extractClearBtn.addEventListener('click', () => {
+            textResult.classList.remove('active'); extractedText.value = '';
+            extractStatus.textContent = ''; extractDropZone.style.display = '';
+        });
+    </script>
+</body>
+</html>
