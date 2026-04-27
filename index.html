@@ -6,7 +6,7 @@
     <title>free.pdf — PDF 편집 · 변환 · 워터마크</title>
     <link rel="alternate" hreflang="ko" href="./">
     <link rel="alternate" hreflang="en" href="./en/">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'none'; form-action 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'none'; form-action 'none';">
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -48,6 +48,29 @@
         .view{display:none}.view.active{display:block}
         .back-btn{background:#fff;border:none;color:#111;font-size:14px;cursor:pointer;padding:8px 18px;margin-bottom:24px;font-family:inherit;font-weight:600;transition:opacity .2s;display:inline-flex;align-items:center;gap:6px;border-radius:20px}
         .back-btn:hover{opacity:.8}
+        .edit-layout{display:flex;gap:20px}
+        .edit-sidebar{width:220px;flex-shrink:0}
+        .edit-sidebar-title{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+        .edit-file-list{display:flex;flex-direction:column;gap:4px;margin-bottom:16px}
+        .edit-file-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .2s;font-size:12px;color:#888;overflow:hidden}
+        .edit-file-item:hover{background:rgba(255,255,255,.04)}
+        .edit-file-item.active{background:rgba(255,255,255,.06);color:#e0e0e0}
+        .edit-file-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+        .edit-file-info{flex:1;min-width:0}
+        .edit-file-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+        .edit-file-meta{font-size:10px;color:#555;margin-top:2px}
+        .edit-file-pages{color:#555;font-size:11px;margin-left:auto;flex-shrink:0}
+        .edit-file-remove{background:#fff;border:none;color:#111;width:22px;height:22px;border-radius:6px;cursor:pointer;margin-left:4px;transition:opacity .2s;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0}
+        .edit-file-remove:hover{opacity:.7}
+        .edit-file-remove svg{width:13px;height:13px}
+        .edit-main{flex:1;min-width:0}
+        .page-thumb-color{position:absolute;bottom:4px;left:4px;width:8px;height:8px;border-radius:50%}
+        .edit-add-thumb{border:2px dashed #555;background:repeating-linear-gradient(45deg,rgba(255,255,255,.04),rgba(255,255,255,.04) 8px,rgba(255,255,255,.08) 8px,rgba(255,255,255,.08) 16px);display:flex;align-items:center;justify-content:center;cursor:pointer;min-height:120px;transition:border-color .2s;border-radius:8px}
+        .edit-add-thumb:hover{border-color:#888}
+        .page-preview-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:flex;align-items:center;justify-content:center;cursor:pointer}
+        .page-preview-overlay canvas{max-width:90vw;max-height:90vh;border-radius:8px}
+        .page-preview-close{position:fixed;top:20px;right:24px;color:#fff;font-size:24px;cursor:pointer;z-index:1001}
+        @media(max-width:600px){.edit-layout{flex-direction:column}.edit-sidebar{width:100%}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         .view.active{animation:fadeIn .15s ease-out}
         .tool-title{font-size:2rem;font-weight:800;color:#fff;margin-bottom:10px;letter-spacing:-.5px}
@@ -85,15 +108,16 @@
         .page-thumb canvas{width:100%;border-radius:4px;display:block}
         .page-thumb-num{font-size:10px;color:#555;margin-top:4px;font-weight:600}
         .page-thumb.selected .page-thumb-num{color:#a855f7}
-        .page-thumb-check{position:absolute;top:3px;right:3px;width:18px;height:18px;background:#a855f7;border-radius:50%;display:none;align-items:center;justify-content:center;font-size:10px;color:#fff}
-        .page-thumb.selected .page-thumb-check{display:flex}
+        .page-thumb-check{display:none}
         .page-thumb.dragging-thumb{opacity:.3}
         .page-thumb.drag-over-thumb{border-color:#a855f7;transform:scale(1.02)}
         .page-grid.zoomed{grid-template-columns:repeat(2,1fr)}
         .page-grid.zoomed .page-thumb{padding:10px}
         .page-thumb-source{font-size:9px;color:#444;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .page-thumb-rotate{position:absolute;top:3px;left:3px;width:20px;height:20px;background:rgba(0,0,0,.7);border:none;color:#888;border-radius:50%;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;transition:color .2s;z-index:2}
-        .page-thumb-rotate:hover{color:#fff}
+        .page-thumb-actions{position:absolute;top:3px;left:3px;display:flex;gap:3px;z-index:2;opacity:0;transition:opacity .2s}
+        .page-thumb:hover .page-thumb-actions{opacity:1}
+        .page-thumb-btn{width:22px;height:22px;background:#fff;border:none;color:#111;border-radius:6px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:opacity .2s}
+        .page-thumb-btn:hover{opacity:.7}
         .actions{display:flex;gap:10px;margin-bottom:16px}
         .btn{padding:14px 24px;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s;flex:1;font-family:inherit}
         .btn-primary{background:#a855f7;color:#fff}
@@ -176,19 +200,25 @@
     <input type="file" id="editFileInput" accept=".pdf" multiple>
     <div class="error-msg" id="editError"></div>
     <div id="editWorkspace" style="display:none">
-        <div class="drop-zone" id="editAddDropZone" style="padding:20px;margin-bottom:16px"><div class="drop-zone-text" style="font-size:13px;margin:0">+ PDF 파일 추가</div></div>
-        <input type="file" id="editAddFileInput" accept=".pdf" multiple>
-        <div class="page-grid-controls">
-            <button class="btn btn-sm btn-secondary" id="editSelectAll">전체 선택</button>
-            <button class="btn btn-sm btn-secondary" id="editSelectNone">전체 해제</button>
-            <button class="btn btn-sm btn-secondary" id="editToggleZoom">크게 보기</button>
-            <input class="form-input" id="editRangeInput" placeholder="범위 (예: 1-3, 5)">
-            <button class="btn btn-sm btn-primary" id="editRangeApply">적용</button>
+        <div class="edit-layout">
+            <div class="edit-sidebar">
+                <div class="edit-sidebar-title">파일 목록</div>
+                <div class="edit-file-list" id="editFileList"></div>
+                <div class="drop-zone" id="editAddDropZone" style="padding:16px;margin-bottom:0"><div class="drop-zone-text" style="font-size:12px;margin:0">+ 파일 추가</div></div>
+                <input type="file" id="editAddFileInput" accept=".pdf" multiple>
+            </div>
+            <div class="edit-main">
+                <div class="page-grid-controls">
+                    <button class="btn btn-sm btn-secondary" id="editSelectToggle">전체 해제</button>
+                    <button class="btn btn-sm btn-secondary" id="editToggleZoom">크게 보기</button>
+                </div>
+                <div class="page-grid" id="editPageGrid"></div>
+                <input type="file" id="editInlineAddInput" accept=".pdf" multiple>
+                <div class="progress-bar" id="editProgress"><div class="progress-bar-fill" id="editProgressFill"></div></div>
+                <div class="status" id="editStatus"></div>
+                <div class="actions"><button class="btn btn-secondary" id="editClearBtn">초기화</button><button class="btn btn-primary" id="editSaveBtn" disabled>저장</button></div>
+            </div>
         </div>
-        <div class="page-grid" id="editPageGrid"></div>
-        <div class="progress-bar" id="editProgress"><div class="progress-bar-fill" id="editProgressFill"></div></div>
-        <div class="status" id="editStatus"></div>
-        <div class="actions"><button class="btn btn-secondary" id="editClearBtn">초기화</button><button class="btn btn-primary" id="editSaveBtn" disabled>저장</button></div>
     </div>
 </div>
 
@@ -298,7 +328,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
 
 // ===== Error/Warning display =====
 function showError(errEl,msg){errEl.innerHTML=`${escapeHtml(msg)}<button class="error-msg-close" onclick="this.parentElement.classList.remove('show')">&times;</button>`;errEl.classList.add('show')}
-function showWarn(parentEl,msg){const existing=parentEl.querySelector('.warn-msg');if(existing)existing.remove();const w=document.createElement('div');w.className='warn-msg';w.innerHTML=`${escapeHtml(msg)}<button class="warn-msg-close" onclick="this.parentElement.remove()">&times;</button>`;parentEl.insertBefore(w,parentEl.querySelector('.progress-bar')||parentEl.querySelector('.status')||parentEl.querySelector('.actions'))}
+function showWarn(parentEl,msg){const existing=parentEl.querySelector('.warn-msg');if(existing)existing.remove();const w=document.createElement('div');w.className='warn-msg';w.innerHTML=`${escapeHtml(msg)}<button class="warn-msg-close" onclick="this.parentElement.remove()">&times;</button>`;const target=parentEl.querySelector('.drop-zone');if(target)target.insertAdjacentElement('afterend',w);else parentEl.prepend(w)}
 
 // ===== Helpers =====
 async function loadPdf(ab){const pdf=await PDFLib.PDFDocument.load(ab,{ignoreEncryption:true});if(pdf.isEncrypted)console.warn('[진짜무료PDF] 권한 보호 PDF — 제한 우회됨');return pdf}
@@ -363,7 +393,8 @@ async function renderPageGrid(arrayBuffer,containerId,opts={}){
 }
 
 // ===== 1. PDF 편집 (합치기+나누기+삭제+추출+회전 통합) =====
-let editPages=[],editDragIdx=null,editSourceNames=[];
+const fileColors=['#fb7185','#fb923c','#fbbf24','#a3e635','#34d399','#2dd4bf','#22d3ee','#a78bfa','#e879f9','#f472b6'];
+let editPages=[],editDragIdx=null,editSourceNames=[],editSourceFiles=[],editCancelled=new Set();
 setupDropZone('editDropZone','editFileInput',handleEditFiles);
 setupDropZone('editAddDropZone','editAddFileInput',handleEditFiles);
 
@@ -372,16 +403,19 @@ async function handleEditFiles(files){
     checkLargeFiles(files,document.getElementById('view-edit'));
     for(const f of files.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'))){
         try{
-            const ab=await f.arrayBuffer();
-            const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+            const rawBuf=await f.arrayBuffer();const ab=rawBuf.slice(0);
+            const pdf=await pdfjsLib.getDocument({data:ab.slice(0)}).promise;
             const fname=f.name.replace(/\.pdf$/i,'');
-            if(!editSourceNames.includes(fname))editSourceNames.push(fname);
+            if(!editSourceNames.includes(fname)){editSourceNames.push(fname);editSourceFiles.push({name:f.name,size:f.size,pageCount:pdf.numPages})}
             for(let i=0;i<pdf.numPages;i++){
-                const page=await pdf.getPage(i+1);const vp=page.getViewport({scale:.25});
+                if(editCancelled.has(fname))break;
+                const page=await pdf.getPage(i+1);const vp=page.getViewport({scale:.5});
                 const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
                 await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+                if(editCancelled.has(fname))break;
                 editPages.push({arrayBuffer:ab,sourceFile:fname,sourcePageIndex:i,selected:true,thumbCanvas:canvas,rotation:0});
             }
+            editCancelled.delete(fname);
         }catch(e){showError(errEl,`"${f.name}" 읽기 실패`)}
     }
     if(editPages.length){
@@ -391,22 +425,80 @@ async function handleEditFiles(files){
     }
 }
 
+function getFileColor(fname){const idx=editSourceNames.indexOf(fname);return fileColors[idx%fileColors.length]}
+
+function renderEditFileList(){
+    const list=document.getElementById('editFileList');list.innerHTML='';
+    editSourceNames.forEach((fname,i)=>{
+        const color=fileColors[i%fileColors.length];
+        const count=editPages.filter(p=>p.sourceFile===fname).length;
+        const div=document.createElement('div');div.className='edit-file-item';
+        const fileInfo=editSourceFiles[i]||{};
+        const sizeStr=fileInfo.size?formatSize(fileInfo.size):'';
+        div.innerHTML=`<span class="edit-file-dot" style="background:${color}"></span><div class="edit-file-info"><div class="edit-file-name" title="${fname}.pdf">${fname}.pdf</div><div class="edit-file-meta">${sizeStr} · ${count}페이지</div></div><button class="edit-file-remove" title="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
+        div.querySelector('.edit-file-info').addEventListener('click',()=>{
+            editPages.forEach(p=>p.selected=p.sourceFile===fname);
+            renderEditGrid();
+        });
+        div.querySelector('.edit-file-remove').addEventListener('click',e=>{
+            e.stopPropagation();
+            editCancelled.add(fname);
+            editPages=editPages.filter(p=>p.sourceFile!==fname);
+            editSourceNames.splice(i,1);editSourceFiles.splice(i,1);
+            if(!editPages.length){document.getElementById('editClearBtn').click();return}
+            renderEditGrid();
+        });
+        list.appendChild(div);
+    });
+}
+
+function renderThumbCanvas(pg){
+    const src=pg.thumbCanvas;const rot=pg.rotation%360;
+    const swap=rot===90||rot===270;
+    const w=swap?src.height:src.width;const h=swap?src.width:src.height;
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    const ctx=c.getContext('2d');
+    ctx.translate(w/2,h/2);ctx.rotate(rot*Math.PI/180);
+    ctx.drawImage(src,-src.width/2,-src.height/2);
+    return c;
+}
+
 function renderEditGrid(){
     const grid=document.getElementById('editPageGrid');grid.innerHTML='';
-    const multiSource=editSourceNames.length>1;
+    const sidebar=document.querySelector('.edit-sidebar');
+    if(sidebar)sidebar.style.display=editSourceNames.length>1?'':'none';
+    if(editSourceNames.length>1)renderEditFileList();
     editPages.forEach((pg,i)=>{
+        const color=getFileColor(pg.sourceFile);
         const div=document.createElement('div');div.className='page-thumb'+(pg.selected?' selected':'');div.draggable=true;
-        div.innerHTML='<div class="page-thumb-check">✓</div><button class="page-thumb-rotate" title="90° 회전">↻</button>';
-        const c=document.createElement('canvas');c.width=pg.thumbCanvas.width;c.height=pg.thumbCanvas.height;
-        c.getContext('2d').drawImage(pg.thumbCanvas,0,0);
-        if(pg.rotation)c.style.transform=`rotate(${pg.rotation}deg)`;
+        div.style.borderColor=pg.selected?color:'';
+        div.innerHTML=`<div class="page-thumb-check" style="background:${color}">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" title="90° 회전">↻</button><button class="page-thumb-btn" data-act="preview" title="원본 보기">⤢</button></div><div class="page-thumb-color" style="background:${color}"></div>`;
+        const c=renderThumbCanvas(pg);
         div.insertBefore(c,div.firstChild);
         const num=document.createElement('div');num.className='page-thumb-num';num.textContent=(i+1)+'p';div.appendChild(num);
-        if(multiSource){const src=document.createElement('div');src.className='page-thumb-source';src.textContent=pg.sourceFile;div.appendChild(src)}
-        // 회전 버튼
-        div.querySelector('.page-thumb-rotate').addEventListener('click',e=>{e.stopPropagation();pg.rotation=(pg.rotation+90)%360;c.style.transform=`rotate(${pg.rotation}deg)`});
+        // 회전 버튼 — 캔버스를 다시 그림
+        div.querySelector('[data-act="rotate"]').addEventListener('click',e=>{
+            e.stopPropagation();pg.rotation=(pg.rotation+90)%360;
+            const newC=renderThumbCanvas(pg);
+            div.replaceChild(newC,div.querySelector('canvas'));
+        });
+        // 원본 보기 버튼
+        div.querySelector('[data-act="preview"]').addEventListener('click',async e=>{
+            e.stopPropagation();
+            const pdf=await pdfjsLib.getDocument({data:pg.arrayBuffer.slice(0)}).promise;
+            const page=await pdf.getPage(pg.sourcePageIndex+1);
+            const rot=pg.rotation%360;
+            const vp=page.getViewport({scale:1.5,rotation:rot});
+            const bigCanvas=document.createElement('canvas');bigCanvas.width=vp.width;bigCanvas.height=vp.height;
+            await page.render({canvasContext:bigCanvas.getContext('2d'),viewport:vp}).promise;
+            const overlay=document.createElement('div');overlay.className='page-preview-overlay';
+            overlay.innerHTML='<span class="page-preview-close">&times;</span>';
+            overlay.appendChild(bigCanvas);
+            overlay.addEventListener('click',()=>overlay.remove());
+            document.body.appendChild(overlay);
+        });
         // 선택 토글
-        div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate'))return;pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);updateEditStatus()});
+        div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate'))return;pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';updateEditStatus()});
         // 드래그 순서 변경
         div.addEventListener('dragstart',e=>{editDragIdx=i;div.classList.add('dragging-thumb');e.dataTransfer.effectAllowed='move'});
         div.addEventListener('dragend',()=>{div.classList.remove('dragging-thumb');grid.querySelectorAll('.drag-over-thumb').forEach(el=>el.classList.remove('drag-over-thumb'));editDragIdx=null});
@@ -415,29 +507,40 @@ function renderEditGrid(){
         div.addEventListener('drop',e=>{e.preventDefault();div.classList.remove('drag-over-thumb');if(editDragIdx===null||editDragIdx===i)return;const[moved]=editPages.splice(editDragIdx,1);editPages.splice(i,0,moved);editDragIdx=null;renderEditGrid()});
         grid.appendChild(div);
     });
+    // 추가 버튼을 앞뒤에 생성
+    const fi=document.getElementById('editInlineAddInput');
+    function makeAddBtn(){
+        const btn=document.createElement('div');btn.className='edit-add-thumb';
+        btn.innerHTML='<div style="font-size:13px;color:#666;font-weight:600">+ 추가</div>';
+        btn.addEventListener('click',()=>fi.click());
+        btn.addEventListener('dragover',e=>{e.preventDefault();btn.style.borderColor='#666'});
+        btn.addEventListener('dragleave',()=>{btn.style.borderColor=''});
+        btn.addEventListener('drop',e=>{e.preventDefault();btn.style.borderColor='';
+            const files=Array.from(e.dataTransfer.files).filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
+            if(files.length)handleEditFiles(files);
+        });
+        return btn;
+    }
+    grid.insertBefore(makeAddBtn(),grid.firstChild);
+    grid.appendChild(makeAddBtn());
+    fi.onchange=e=>{handleEditFiles(Array.from(e.target.files));fi.value=''};
     updateEditStatus();
 }
 
 function updateEditStatus(){
     const sel=editPages.filter(p=>p.selected).length;const total=editPages.length;
-    const msg=sel===0?'페이지를 선택하세요':sel===total?`전체 ${total}페이지 준비 완료`:`${total}페이지 중 ${sel}페이지 선택`;
+    const msg=sel===0?'저장할 페이지를 선택하세요':sel===total?'불필요한 페이지를 클릭해서 해제하세요':`${total}페이지 중 ${sel}페이지 선택`;
     document.getElementById('editStatus').textContent=msg;
-    document.getElementById('editSaveBtn').disabled=sel===0;
+    const btn=document.getElementById('editSaveBtn');
+    btn.disabled=sel===0;btn.textContent=sel?`${sel}페이지 저장`:'저장';
 }
 
-document.getElementById('editSelectAll').addEventListener('click',()=>{editPages.forEach(p=>p.selected=true);renderEditGrid()});
-document.getElementById('editSelectNone').addEventListener('click',()=>{editPages.forEach(p=>p.selected=false);renderEditGrid()});
-document.getElementById('editToggleZoom').addEventListener('click',()=>{const g=document.getElementById('editPageGrid');g.classList.toggle('zoomed');document.getElementById('editToggleZoom').textContent=g.classList.contains('zoomed')?'작게 보기':'크게 보기'});
-document.getElementById('editRangeApply').addEventListener('click',()=>{
-    const v=document.getElementById('editRangeInput').value.trim();const errEl=document.getElementById('editError');
-    if(!v){showError(errEl,'범위를 입력하세요 (예: 1-3, 5)');return}
-    const parsed=parseRange(v,editPages.length);
-    if(!parsed.length){showError(errEl,'유효한 페이지가 없습니다');return}
-    errEl.classList.remove('show');
-    editPages.forEach(p=>p.selected=false);
-    parsed.forEach(i=>{editPages[i].selected=true});
-    renderEditGrid();
+document.getElementById('editSelectToggle').addEventListener('click',()=>{
+    const allSelected=editPages.every(p=>p.selected);
+    editPages.forEach(p=>p.selected=!allSelected);renderEditGrid();
+    document.getElementById('editSelectToggle').textContent=!allSelected?'전체 해제':'전체 선택';
 });
+document.getElementById('editToggleZoom').addEventListener('click',()=>{const g=document.getElementById('editPageGrid');g.classList.toggle('zoomed');document.getElementById('editToggleZoom').textContent=g.classList.contains('zoomed')?'작게 보기':'크게 보기'});
 
 document.getElementById('editSaveBtn').addEventListener('click',async()=>{
     const selected=editPages.filter(p=>p.selected);if(!selected.length)return;
@@ -449,7 +552,7 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
         for(let i=0;i<selected.length;i++){
             const pg=selected[i];
             let src=pdfCache.get(pg.arrayBuffer);
-            if(!src){src=await loadPdf(pg.arrayBuffer);pdfCache.set(pg.arrayBuffer,src)}
+            if(!src){src=await loadPdf(pg.arrayBuffer.slice(0));pdfCache.set(pg.arrayBuffer,src)}
             const[copied]=await doc.copyPages(src,[pg.sourcePageIndex]);
             if(pg.rotation){const cur=copied.getRotation().angle;copied.setRotation(PDFLib.degrees((cur+pg.rotation)%360))}
             doc.addPage(copied);
@@ -464,10 +567,11 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
 });
 
 document.getElementById('editClearBtn').addEventListener('click',()=>{
-    editPages=[];editSourceNames=[];
+    editPages=[];editSourceNames=[];editSourceFiles=[];editCancelled.clear();
     document.getElementById('editWorkspace').style.display='none';
     document.getElementById('editDropZone').style.display='';
     document.getElementById('editPageGrid').innerHTML='';
+    document.getElementById('editFileList').innerHTML='';
     document.getElementById('editStatus').textContent='';
     document.getElementById('editError').classList.remove('show');
 });
@@ -657,12 +761,12 @@ function resetTool(id){
     view.querySelectorAll('.text-result').forEach(t=>t.classList.remove('active'));
     view.querySelectorAll('[id$="PageContainer"]').forEach(c=>c.innerHTML='');
     if(id==='convert'){imgFiles=[];document.getElementById('img2pdfPreview').innerHTML='';document.getElementById('img2pdfActions').style.display='none';document.getElementById('img2pdfSizeGroup').style.display='none'}
-    if(id==='edit'){editPages=[];editSourceNames=[];document.getElementById('editWorkspace').style.display='none';document.getElementById('editPageGrid').innerHTML=''}
+    if(id==='edit'){editPages=[];editSourceNames=[];editSourceFiles=[];document.getElementById('editWorkspace').style.display='none';document.getElementById('editPageGrid').innerHTML='';document.getElementById('editFileList').innerHTML=''}
     if(id==='watermark'){wmImgData=null;const z=document.getElementById('wmImgZone');if(z)z.innerHTML='<div class="drop-zone-icon">IMG</div><div class="drop-zone-text">이미지를 선택하세요</div><div class="drop-zone-sub">PNG (투명 배경 권장)</div>'}
     if(id==='text'){document.getElementById('textDropZone').style.display=''}
 }
 </script>
 <script data-goatcounter="https://kgh-kang.goatcounter.com/count"
-        async src="//gc.zgo.at/count.js"></script>
+        async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
