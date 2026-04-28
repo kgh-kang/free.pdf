@@ -1,14 +1,87 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 const APP_BASE=new URL('.',document.currentScript.src).href;
-let _pretendardCache=null;
+const KOREAN_FONT_CDN='https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Regular.ttf';
+const KOREAN_FONT_B64_PATH='fonts/korean-base64.js';
+const KOREAN_FONT_PATH='fonts/NanumGothic-Regular.ttf';
+let _koreanFontCache=null;
+let _koreanFontWarned=false;
+let _koreanFontB64Promise=null;
+
+function loadKoreanFontBase64(){
+    if(_koreanFontB64Promise)return _koreanFontB64Promise;
+    _koreanFontB64Promise=new Promise((resolve,reject)=>{
+        if(window._KOREAN_FONT_BASE64)return resolve();
+        const s=document.createElement('script');
+        s.src=new URL(KOREAN_FONT_B64_PATH,APP_BASE).href;
+        s.onload=()=>window._KOREAN_FONT_BASE64?resolve():reject(new Error('base64 missing'));
+        s.onerror=()=>reject(new Error('script load failed'));
+        document.head.appendChild(s);
+    });
+    return _koreanFontB64Promise;
+}
+
 async function embedPretendard(pdfDoc){
-    if(!_pretendardCache){
-        const res=await fetch(new URL('fonts/Pretendard-Regular.otf',APP_BASE).href);
-        _pretendardCache=new Uint8Array(await res.arrayBuffer());
+    if(_koreanFontCache==='FAIL'){
+        return await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+    }
+    if(!_koreanFontCache){
+        const isFile=location.protocol==='file:';
+        // file://에서는 fetch가 차단되므로 base64 script 우선
+        if(isFile){
+            try{
+                await loadKoreanFontBase64();
+                const bin=atob(window._KOREAN_FONT_BASE64);
+                const arr=new Uint8Array(bin.length);
+                for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i)&0xff;
+                // TTF 시그니처(0x00010000) 또는 OTTO 검증
+                const sigOK=(arr[0]===0x00&&arr[1]===0x01&&arr[2]===0x00&&arr[3]===0x00)
+                          ||(arr[0]===0x4F&&arr[1]===0x54&&arr[2]===0x54&&arr[3]===0x4F);
+                if(sigOK){_koreanFontCache=arr}
+                else{console.warn('[free.pdf] base64 디코딩 결과 손상',arr.slice(0,4))}
+            }catch(e){console.warn('[free.pdf] base64 폰트 로드 실패',e)}
+        }
+        // http(s) 환경 또는 base64 실패 시 fetch 시도
+        if(!_koreanFontCache){
+            const urls=isFile?[]:[new URL(KOREAN_FONT_PATH,APP_BASE).href,KOREAN_FONT_CDN];
+            for(const url of urls){
+                try{
+                    const res=await fetch(url);
+                    if(res.ok){
+                        _koreanFontCache=new Uint8Array(await res.arrayBuffer());
+                        break;
+                    }
+                }catch(_){}
+            }
+        }
+        // http(s) 환경에서도 실패 시 base64 시도 (마지막 수단)
+        if(!_koreanFontCache&&!isFile){
+            try{
+                await loadKoreanFontBase64();
+                const bin=atob(window._KOREAN_FONT_BASE64);
+                const arr=new Uint8Array(bin.length);
+                for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i)&0xff;
+                _koreanFontCache=arr;
+            }catch(_){}
+        }
+        if(!_koreanFontCache){
+            _koreanFontCache='FAIL';
+            if(!_koreanFontWarned){
+                _koreanFontWarned=true;
+                console.warn('[free.pdf] 한글 폰트 로드 실패 — Helvetica로 대체. 한글 표시가 제한됩니다.');
+            }
+            return await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+        }
     }
     pdfDoc.registerFontkit(fontkit);
-    return await pdfDoc.embedFont(_pretendardCache,{subset:true});
+    try{
+        // subset 파이프라인이 한글 일부 글자를 누락시키는 이슈가 있어 전체 임베드 사용
+        return await pdfDoc.embedFont(_koreanFontCache,{subset:false});
+    }catch(e){
+        console.warn('[free.pdf] 한글 폰트 임베드 실패, Helvetica fallback',e.message);
+        _koreanFontCache='FAIL';
+        return await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+    }
 }
 
 const T=window.I18N;
@@ -20,7 +93,7 @@ function showWarn(parentEl,msg){const existing=parentEl.querySelector('.warn-msg
 // ===== Helpers =====
 async function loadPdf(ab){const pdf=await PDFLib.PDFDocument.load(ab,{ignoreEncryption:true});if(pdf.isEncrypted)console.warn(T.consoleEncrypted);return pdf}
 function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB'}
-function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
 function parseRange(str,max){const pages=new Set();str.split(',').forEach(p=>{p=p.trim();const m=p.match(/^(\d+)\s*-\s*(\d+)$/);if(m){for(let i=Math.max(1,+m[1]);i<=Math.min(max,+m[2]);i++)pages.add(i-1)}else{const n=parseInt(p);if(n>=1&&n<=max)pages.add(n-1)}});return Array.from(pages).sort((a,b)=>a-b)}
 function showComplete(statusEl,msg){statusEl.innerHTML=`${msg} <button class="completion-link" onclick="showHome()">${T.backToTools}</button>`}
@@ -35,7 +108,11 @@ history.replaceState({view:location.hash?location.hash.slice(1):'home'},'');
 function setupDropZone(dzId,fiId,cb,opts={}){
     const dz=document.getElementById(dzId),fi=document.getElementById(fiId);
     const accept=opts.accept||'application/pdf';const multi=fi.hasAttribute('multiple');
+    dz.setAttribute('role','button');
+    dz.setAttribute('tabindex','0');
+    if(!dz.hasAttribute('aria-label'))dz.setAttribute('aria-label',(opts.accept==='image/*'?'이미지':'PDF')+' 파일 선택');
     dz.addEventListener('click',()=>fi.click());
+    dz.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click()}});
     dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over')});
     dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
     dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');
@@ -89,21 +166,26 @@ async function handleEditFiles(files){
     const errEl=document.getElementById('editError');
     checkLargeFiles(files,document.getElementById('view-edit'));
     for(const f of files.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'))){
+        let pdf=null;
         try{
             const rawBuf=await f.arrayBuffer();const ab=rawBuf.slice(0);
-            const pdf=await pdfjsLib.getDocument({data:ab.slice(0)}).promise;
+            pdf=await pdfjsLib.getDocument({data:ab.slice(0)}).promise;
             const fname=f.name.replace(/\.pdf$/i,'');
             if(!editSourceNames.includes(fname)){editSourceNames.push(fname);editSourceFiles.push({name:f.name,size:f.size,pageCount:pdf.numPages})}
             for(let i=0;i<pdf.numPages;i++){
                 if(editCancelled.has(fname))break;
-                const page=await pdf.getPage(i+1);const vp=page.getViewport({scale:.5});
+                const page=await pdf.getPage(i+1);
+                const thumbDpr=Math.max(2,window.devicePixelRatio||1);
+                const vp=page.getViewport({scale:THUMB_SCALE*thumbDpr});
+                const baseVp=page.getViewport({scale:1});
                 const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
                 await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
                 if(editCancelled.has(fname))break;
-                editPages.push({arrayBuffer:ab,sourceFile:fname,sourcePageIndex:i,selected:true,thumbCanvas:canvas,rotation:0,textBoxes:[]});
+                editPages.push({arrayBuffer:ab,sourceFile:fname,sourcePageIndex:i,selected:true,thumbCanvas:canvas,rotation:0,textBoxes:[],imageBoxes:[],pageW:baseVp.width,pageH:baseVp.height,thumbDpr});
             }
             editCancelled.delete(fname);
         }catch(e){showError(errEl,T.errFileRead(f.name))}
+        finally{if(pdf)try{await pdf.destroy()}catch(_){}}
     }
     if(editPages.length){
         document.getElementById('editDropZone').style.display='none';
@@ -122,9 +204,13 @@ function renderEditFileList(){
         const div=document.createElement('div');div.className='edit-file-item';
         const fileInfo=editSourceFiles[i]||{};
         const sizeStr=fileInfo.size?formatSize(fileInfo.size):'';
-        div.innerHTML=`<span class="edit-file-dot" style="background:${color}"></span><div class="edit-file-info"><div class="edit-file-name" title="${fname}.pdf">${fname}.pdf</div><div class="edit-file-meta">${T.fileMeta(sizeStr,count)}</div></div><button class="edit-file-remove" title="${T.deleteTitle}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
+        const safeName=escapeHtml(fname)+'.pdf';
+        div.innerHTML=`<span class="edit-file-dot" style="background:${color}"></span><div class="edit-file-info"><div class="edit-file-name" title="${safeName}">${safeName}</div><div class="edit-file-meta">${T.fileMeta(sizeStr,count)}</div></div><button class="edit-file-remove" title="${T.deleteTitle}" aria-label="${T.deleteTitle}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
         div.querySelector('.edit-file-info').addEventListener('click',()=>{
-            editPages.forEach(p=>p.selected=p.sourceFile===fname);
+            // 해당 파일 페이지를 토글 (다른 파일은 영향 없음)
+            const filePages=editPages.filter(p=>p.sourceFile===fname);
+            const allSel=filePages.every(p=>p.selected);
+            filePages.forEach(p=>p.selected=!allSel);
             renderEditGrid();
         });
         div.querySelector('.edit-file-remove').addEventListener('click',e=>{
@@ -140,7 +226,7 @@ function renderEditFileList(){
 }
 
 // 썸네일은 PDF 페이지의 0.5 스케일이라, 모든 stamp 좌표/사이즈를 0.5배로 그림
-const THUMB_SCALE=0.5;
+const THUMB_SCALE=0.85;
 
 let _markImgEl=null;
 async function getMarkImgElement(){
@@ -173,15 +259,26 @@ function getStampOptionsLive(){
     };
 }
 
+// 모달 편집 상태
+const _textOpts={addMode:false,size:14,color:'#222',bold:false,underline:false,align:'left',bg:''};
+const _imgCache=new Map();
+function getCachedImage(dataUrl){
+    let img=_imgCache.get(dataUrl);
+    if(!img){img=new Image();img.src=dataUrl;_imgCache.set(dataUrl,img)}
+    return img;
+}
 function getTextModeOptions(){
-    return{
-        textModeOn:document.getElementById('editTextEnable')?.checked,
-        textSize:parseInt(document.getElementById('editTextSize')?.value)||14,
-        textColor:document.getElementById('editTextColor')?.value||'#222',
-    };
+    return{textModeOn:_textOpts.addMode,textSize:_textOpts.size,textColor:_textOpts.color,textBold:_textOpts.bold,textUnderline:_textOpts.underline,textAlign:_textOpts.align,textBg:_textOpts.bg};
 }
 
 function genBoxId(){return 'b'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+function hexToPdfRgb(hex){
+    if(!hex)return{r:0,g:0,b:0};
+    let h=hex.replace('#','');
+    if(h.length===3)h=h.split('').map(c=>c+c).join('');
+    return{r:parseInt(h.slice(0,2),16)/255,g:parseInt(h.slice(2,4),16)/255,b:parseInt(h.slice(4,6),16)/255};
+}
 
 function drawWatermarkTextLayer(ctx,w,h,text,fontSize,layout){
     ctx.save();
@@ -225,16 +322,49 @@ function drawPagenumLayer(ctx,cw,ch,label,pos,scale){
     ctx.restore();
 }
 
+function drawImageBoxesLayer(ctx,scale,boxes){
+    if(!boxes||!boxes.length)return;
+    boxes.forEach(b=>{
+        const img=getCachedImage(b.dataUrl);
+        if(img.complete&&img.naturalWidth){
+            ctx.drawImage(img,b.x*scale,b.y*scale,b.w*scale,b.h*scale);
+        }
+    });
+}
 function drawTextBoxesLayer(ctx,scale,boxes){
     if(!boxes||!boxes.length)return;
     boxes.forEach(b=>{
         ctx.save();
         const sz=b.size*scale;
-        ctx.font=`${sz}px 'Pretendard Variable',Pretendard,sans-serif`;
-        ctx.fillStyle=b.color||'#222';
+        const fw=b.bold?'bold ':'';
+        ctx.font=`${fw}${sz}px 'Pretendard Variable',Pretendard,sans-serif`;
         ctx.textBaseline='top';
-        (b.text||'').split('\n').forEach((line,idx)=>{
-            ctx.fillText(line,b.x*scale,(b.y+idx*b.size*1.2)*scale);
+        const lines=(b.text||'').split('\n');
+        const lineH=b.size*1.2;
+        const widths=lines.map(l=>ctx.measureText(l).width);
+        const maxW=Math.max(0,...widths);
+        const totalH=lineH*lines.length*scale;
+        // 배경
+        if(b.bg){
+            const padX=4*scale,padY=2*scale;
+            ctx.fillStyle=b.bg;
+            ctx.fillRect(b.x*scale-padX,b.y*scale-padY,maxW+padX*2,totalH+padY*2);
+        }
+        // 텍스트 (정렬은 박스 폭 기준)
+        ctx.fillStyle=b.color||'#222';
+        const align=b.align||'left';
+        lines.forEach((line,idx)=>{
+            const lineW=widths[idx];
+            let xPos=b.x*scale;
+            if(align==='center')xPos+=(maxW-lineW)/2;
+            else if(align==='right')xPos+=(maxW-lineW);
+            const yPos=(b.y+idx*lineH)*scale;
+            ctx.fillText(line,xPos,yPos);
+            // 밑줄
+            if(b.underline&&line.length){
+                const ulY=yPos+sz*1.05;
+                ctx.fillRect(xPos,ulY,lineW,Math.max(1,sz*0.06));
+            }
         });
         ctx.restore();
     });
@@ -263,8 +393,10 @@ function renderThumbCanvas(pg,opts,pageIndex){
     ctx.translate(w/2,h/2);ctx.rotate(rot*Math.PI/180);
     ctx.drawImage(src,-src.width/2,-src.height/2);
     ctx.restore();
-    applyStampOverlays(ctx,w,h,opts,THUMB_SCALE,pageIndex);
-    drawTextBoxesLayer(ctx,THUMB_SCALE,pg.textBoxes);
+    const renderScale=THUMB_SCALE*(pg.thumbDpr||1);
+    drawImageBoxesLayer(ctx,renderScale,pg.imageBoxes);
+    applyStampOverlays(ctx,w,h,opts,renderScale,pageIndex);
+    drawTextBoxesLayer(ctx,renderScale,pg.textBoxes);
     return c;
 }
 
@@ -275,32 +407,325 @@ async function openPageEditor(pg){
     const pdf=await pdfjsLib.getDocument({data:pg.arrayBuffer.slice(0)}).promise;
     const page=await pdf.getPage(pg.sourcePageIndex+1);
     const rot=pg.rotation%360;
-    const vp=page.getViewport({scale:MODAL_SCALE,rotation:rot});
-    const bigCanvas=document.createElement('canvas');bigCanvas.width=vp.width;bigCanvas.height=vp.height;
+    // 화면 표시는 MODAL_SCALE, 실제 캔버스 픽셀은 dpr*2 boost로 선명도 확보
+    const dpr=window.devicePixelRatio||1;
+    const sharpness=Math.max(2,dpr);
+    const renderScale=MODAL_SCALE*sharpness;
+    const displayVp=page.getViewport({scale:MODAL_SCALE,rotation:rot});
+    const vp=page.getViewport({scale:renderScale,rotation:rot});
+    const bigCanvas=document.createElement('canvas');
+    bigCanvas.width=vp.width;bigCanvas.height=vp.height;
+    bigCanvas.style.width=displayVp.width+'px';
+    bigCanvas.style.height=displayVp.height+'px';
     const ctx=bigCanvas.getContext('2d');
     await page.render({canvasContext:ctx,viewport:vp}).promise;
+    // 페이지 렌더 끝나면 pdf.js 핸들 즉시 해제 (워커 메모리 회수)
+    try{await pdf.destroy()}catch(_){}
     const selectedPages=editPages.filter(p=>p.selected);
     const pageIndex=pg.selected?selectedPages.indexOf(pg):null;
-    applyStampOverlays(ctx,vp.width,vp.height,opts,MODAL_SCALE,pageIndex);
+    applyStampOverlays(ctx,vp.width,vp.height,opts,renderScale,pageIndex);
 
     const overlay=document.createElement('div');overlay.className='page-preview-overlay';
     const closeBtn=document.createElement('span');closeBtn.className='page-preview-close';closeBtn.innerHTML='&times;';
     overlay.appendChild(closeBtn);
+
+    // 모달 텍스트 편집 툴바 (단일 진입점)
+    const toolbar=document.createElement('div');toolbar.className='modal-text-toolbar';
+    const colorOpts=T.modalColorOptions.map(o=>`<option value="${o.v}" data-swatch="${o.v}">${o.t}</option>`).join('');
+    const bgOpts=T.modalBgOptions.map(o=>`<option value="${o.v}">${o.t}</option>`).join('');
+    toolbar.innerHTML=`
+        <button class="modal-tb-add-btn" data-act="toggle-add">${_textOpts.addMode?T.modalAddTextActive:T.modalAddText}</button>
+        <button class="modal-tb-add-btn" data-act="add-image">${T.modalAddImage}</button>
+        <span class="modal-tb-divider modal-tb-format-grp"></span>
+        <input class="modal-tb-num modal-tb-format-grp" type="number" min="6" max="96" step="1" data-field="size" title="${T.modalSizeLabel}">
+        <select class="modal-tb-select modal-tb-format-grp" data-field="color" title="${T.modalColorLabel}">${colorOpts}</select>
+        <input class="modal-tb-color-picker modal-tb-format-grp" type="color" data-field="colorpicker" title="${T.modalColorPickerTitle}" value="#222222">
+        <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="bold" title="${T.modalBoldTitle}"><b>B</b></button>
+        <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="underline" title="${T.modalUnderlineTitle}"><span style="text-decoration:underline">U</span></button>
+        <span class="modal-tb-divider modal-tb-format-grp"></span>
+        <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="align" data-val="left" title="${T.modalAlignLeftTitle}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="10" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg></button>
+        <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="align" data-val="center" title="${T.modalAlignCenterTitle}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="8" x2="12" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg></button>
+        <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="align" data-val="right" title="${T.modalAlignRightTitle}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg></button>
+        <span class="modal-tb-divider modal-tb-format-grp"></span>
+        <select class="modal-tb-select modal-tb-format-grp" data-field="bg" title="${T.modalBgLabel}">${bgOpts}</select>
+        <input class="modal-tb-color-picker modal-tb-format-grp" type="color" data-field="bgpicker" title="${T.modalBgPickerTitle}" value="#ffffff">
+        <span class="modal-tb-divider modal-tb-boxalign-grp" style="display:none"></span>
+        <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="left" title="${T.boxAlignLeftTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="2" x2="2" y2="14"/><rect x="4" y="4" width="8" height="3"/><rect x="4" y="9" width="5" height="3"/></svg></button>
+        <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="centerH" title="${T.boxAlignCenterHTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14" stroke-dasharray="2 1.5"/><rect x="4" y="4" width="8" height="3"/><rect x="5.5" y="9" width="5" height="3"/></svg></button>
+        <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="right" title="${T.boxAlignRightTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="14" y1="2" x2="14" y2="14"/><rect x="4" y="4" width="8" height="3"/><rect x="7" y="9" width="5" height="3"/></svg></button>
+        <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="top" title="${T.boxAlignTopTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="2" x2="14" y2="2"/><rect x="4" y="4" width="3" height="8"/><rect x="9" y="4" width="3" height="5"/></svg></button>
+        <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="centerV" title="${T.boxAlignCenterVTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-dasharray="2 1.5"/><rect x="4" y="4" width="3" height="8"/><rect x="9" y="5.5" width="3" height="5"/></svg></button>
+        <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="bottom" title="${T.boxAlignBottomTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="14" x2="14" y2="14"/><rect x="4" y="4" width="3" height="8"/><rect x="9" y="7" width="3" height="5"/></svg></button>
+        <span class="modal-tb-hint"></span>
+    `;
+    overlay.appendChild(toolbar);
+
+    // 현재 포커스된 박스 추적 (또는 null이면 _textOpts에 적용)
+    let _focusedBox=null;
+    const _multiSel=new Set();  // 다중 선택된 박스들 (Shift+클릭)
+    const tbSize=toolbar.querySelector('[data-field="size"]');
+    const tbColor=toolbar.querySelector('[data-field="color"]');
+    const tbColorPicker=toolbar.querySelector('[data-field="colorpicker"]');
+    const tbBg=toolbar.querySelector('[data-field="bg"]');
+    const tbBgPicker=toolbar.querySelector('[data-field="bgpicker"]');
+    const tbBold=toolbar.querySelector('[data-field="bold"]');
+    const tbUnderline=toolbar.querySelector('[data-field="underline"]');
+    const tbAlignBtns=toolbar.querySelectorAll('[data-field="align"]');
+    function isHexInOptions(hex,opts){return opts.some(o=>o.v===hex)}
+    function syncToolbarFromOpts(o){
+        tbSize.value=String(o.size);
+        // select에 있는 색이면 select, 아니면 picker만 업데이트
+        if(isHexInOptions(o.color,T.modalColorOptions))tbColor.value=o.color;else tbColor.value='';
+        tbColorPicker.value=(o.color&&o.color.startsWith('#')&&o.color.length===7)?o.color:'#222222';
+        if(isHexInOptions(o.bg||'',T.modalBgOptions))tbBg.value=o.bg||'';else tbBg.value='';
+        tbBgPicker.value=(o.bg&&o.bg.startsWith('#')&&o.bg.length===7)?o.bg:'#ffffff';
+        tbBold.classList.toggle('active',!!o.bold);
+        tbUnderline.classList.toggle('active',!!o.underline);
+        tbAlignBtns.forEach(b=>b.classList.toggle('active',b.dataset.val===(o.align||'left')));
+    }
+    function getActiveTargets(){
+        // 다중 선택이 있으면 그 셋, 없으면 _focusedBox 단일, 없으면 _textOpts
+        if(_multiSel.size)return Array.from(_multiSel);
+        if(_focusedBox)return [_focusedBox];
+        return [_textOpts];
+    }
+    function refreshBoxDom(box){
+        const el=textLayer.querySelector(`.page-text-box[data-id="${box.id}"]`);
+        if(el)applyBoxStyleToEl(el,box);
+    }
+    const _measureCanvas=document.createElement('canvas');
+    const _measureCtx=_measureCanvas.getContext('2d');
+    function getBoxWidth(box){
+        const fw=box.bold?'bold ':'';
+        _measureCtx.font=`${fw}${box.size}px 'Pretendard Variable',sans-serif`;
+        const lines=(box.text||'').split('\n');
+        return Math.max(0,...lines.map(l=>_measureCtx.measureText(l).width));
+    }
+    function getBoxHeight(box){
+        const lines=(box.text||'').split('\n');
+        return box.size*1.2*Math.max(1,lines.length);
+    }
+    const boxAlignBtns=toolbar.querySelectorAll('.modal-tb-boxalign-grp');
+    const formatGrp=toolbar.querySelectorAll('.modal-tb-format-grp');
+    function refreshBoxAlignVisibility(){
+        const show=_multiSel.size>=2;
+        boxAlignBtns.forEach(el=>el.style.display=show?'':'none');
+    }
+    function refreshFormatVisibility(){
+        // 서식 옵션은 addMode ON 또는 박스 선택 시에만 표시
+        const show=_textOpts.addMode||_focusedBox||_multiSel.size>0;
+        formatGrp.forEach(el=>el.style.display=show?'':'none');
+    }
+    function clearMultiSel(){
+        _multiSel.clear();
+        textLayer.querySelectorAll('.page-text-box.multi-selected').forEach(el=>el.classList.remove('multi-selected'));
+        refreshBoxAlignVisibility();
+        refreshFormatVisibility();
+    }
+    function toggleMultiSel(box,el){
+        if(_multiSel.has(box)){
+            _multiSel.delete(box);
+            el.classList.remove('multi-selected');
+        }else{
+            _multiSel.add(box);
+            el.classList.add('multi-selected');
+            syncToolbarFromOpts(box);
+        }
+        refreshBoxAlignVisibility();
+        refreshFormatVisibility();
+    }
+    function alignBoxes(mode){
+        const boxes=Array.from(_multiSel);
+        if(boxes.length<2)return;
+        const widths=boxes.map(getBoxWidth);
+        const heights=boxes.map(getBoxHeight);
+        const lefts=boxes.map(b=>b.x);
+        const rights=boxes.map((b,i)=>b.x+widths[i]);
+        const tops=boxes.map(b=>b.y);
+        const bottoms=boxes.map((b,i)=>b.y+heights[i]);
+        if(mode==='left'){const m=Math.min(...lefts);boxes.forEach(b=>b.x=m)}
+        else if(mode==='right'){const m=Math.max(...rights);boxes.forEach((b,i)=>b.x=m-widths[i])}
+        else if(mode==='centerH'){const c=(Math.min(...lefts)+Math.max(...rights))/2;boxes.forEach((b,i)=>b.x=c-widths[i]/2)}
+        else if(mode==='top'){const m=Math.min(...tops);boxes.forEach(b=>b.y=m)}
+        else if(mode==='bottom'){const m=Math.max(...bottoms);boxes.forEach((b,i)=>b.y=m-heights[i])}
+        else if(mode==='centerV'){const c=(Math.min(...tops)+Math.max(...bottoms))/2;boxes.forEach((b,i)=>b.y=c-heights[i]/2)}
+        boxes.forEach(refreshBoxDom);
+    }
+    boxAlignBtns.forEach(btn=>{
+        if(btn.dataset.boxalign){
+            btn.addEventListener('click',e=>{e.stopPropagation();alignBoxes(btn.dataset.boxalign)});
+        }
+    });
+    function applyFieldChange(field,value){
+        const targets=getActiveTargets();
+        targets.forEach(t=>{
+            t[field]=value;
+            if(t!==_textOpts)refreshBoxDom(t);
+        });
+    }
+
     const wrap=document.createElement('div');wrap.className='page-editor-wrap';
     wrap.appendChild(bigCanvas);
+    const imageLayer=document.createElement('div');imageLayer.className='page-editor-imagelayer';
+    wrap.appendChild(imageLayer);
     const textLayer=document.createElement('div');textLayer.className='page-editor-textlayer';
     wrap.appendChild(textLayer);
     overlay.appendChild(wrap);
+    const note=document.createElement('div');note.className='modal-preview-note';note.textContent=T.modalPreviewNote;
+    overlay.appendChild(note);
+
+    // 툴바 인터랙션
+    const addBtn=toolbar.querySelector('[data-act="toggle-add"]');
+    const hintEl=toolbar.querySelector('.modal-tb-hint');
+    function refreshAddBtn(){
+        addBtn.textContent=_textOpts.addMode?T.modalAddTextActive:T.modalAddText;
+        addBtn.classList.toggle('active',_textOpts.addMode);
+        hintEl.textContent=_textOpts.addMode?T.modalTextHint:'';
+        bigCanvas.style.cursor=_textOpts.addMode?'text':'default';
+        refreshFormatVisibility();
+    }
+    addBtn.addEventListener('click',e=>{e.stopPropagation();_textOpts.addMode=!_textOpts.addMode;refreshAddBtn()});
+    const addImageBtn=toolbar.querySelector('[data-act="add-image"]');
+    addImageBtn.addEventListener('click',e=>{
+        e.stopPropagation();
+        const fi=document.createElement('input');
+        fi.type='file';fi.accept='image/png,image/jpeg';
+        fi.addEventListener('change',ev=>{
+            const f=ev.target.files[0];if(!f)return;
+            const reader=new FileReader();
+            reader.onload=()=>{
+                const img=new Image();
+                img.onload=()=>{
+                    // 페이지 가운데, 기본 너비 200pt (또는 페이지 폭의 30% 중 작은 값)
+                    const baseW=Math.min(200,pg.pageW*0.3);
+                    const ratio=img.naturalHeight/img.naturalWidth;
+                    const w=baseW,h=baseW*ratio;
+                    const ibox={id:genBoxId(),dataUrl:reader.result,x:(pg.pageW-w)/2,y:(pg.pageH-h)/2,w,h,naturalW:img.naturalWidth,naturalH:img.naturalHeight};
+                    pg.imageBoxes.push(ibox);
+                    _imgCache.set(reader.result,img);
+                    imageLayer.appendChild(makeImageBoxEl(ibox));
+                    scheduleThumbRedraw();
+                };
+                img.src=reader.result;
+            };
+            reader.readAsDataURL(f);
+        });
+        fi.click();
+    });
+    tbSize.addEventListener('input',e=>{
+        let v=parseInt(e.target.value);
+        if(!v||isNaN(v))return;
+        v=Math.max(6,Math.min(96,v));
+        applyFieldChange('size',v);
+    });
+    tbColor.addEventListener('change',e=>{if(e.target.value){applyFieldChange('color',e.target.value);tbColorPicker.value=e.target.value}});
+    tbColorPicker.addEventListener('input',e=>{applyFieldChange('color',e.target.value);if(isHexInOptions(e.target.value,T.modalColorOptions))tbColor.value=e.target.value;else tbColor.value=''});
+    tbBg.addEventListener('change',e=>{applyFieldChange('bg',e.target.value);if(e.target.value)tbBgPicker.value=e.target.value});
+    tbBgPicker.addEventListener('input',e=>{applyFieldChange('bg',e.target.value);if(isHexInOptions(e.target.value,T.modalBgOptions))tbBg.value=e.target.value;else tbBg.value=''});
+    tbBold.addEventListener('click',e=>{
+        e.stopPropagation();
+        const targets=getActiveTargets();
+        const newVal=!targets[0].bold;
+        applyFieldChange('bold',newVal);
+        tbBold.classList.toggle('active',newVal);
+    });
+    tbUnderline.addEventListener('click',e=>{
+        e.stopPropagation();
+        const targets=getActiveTargets();
+        const newVal=!targets[0].underline;
+        applyFieldChange('underline',newVal);
+        tbUnderline.classList.toggle('active',newVal);
+    });
+    tbAlignBtns.forEach(btn=>btn.addEventListener('click',e=>{
+        e.stopPropagation();
+        applyFieldChange('align',btn.dataset.val);
+        tbAlignBtns.forEach(b=>b.classList.toggle('active',b===btn));
+    }));
+    toolbar.addEventListener('click',e=>e.stopPropagation());
+    syncToolbarFromOpts(_textOpts);
 
     if(!pg.textBoxes)pg.textBoxes=[];
+    if(!pg.imageBoxes)pg.imageBoxes=[];
+
+    function makeImageBoxEl(ibox){
+        const el=document.createElement('div');
+        el.className='page-image-box';
+        el.dataset.id=ibox.id;
+        function applyStyle(){
+            el.style.left=(ibox.x*MODAL_SCALE)+'px';
+            el.style.top=(ibox.y*MODAL_SCALE)+'px';
+            el.style.width=(ibox.w*MODAL_SCALE)+'px';
+            el.style.height=(ibox.h*MODAL_SCALE)+'px';
+        }
+        applyStyle();
+        const img=document.createElement('img');
+        img.src=ibox.dataUrl;img.draggable=false;img.alt='';
+        el.appendChild(img);
+        const del=document.createElement('span');
+        del.className='page-image-box-del';del.textContent='✕';del.title=T.modalImageDelTitle;
+        del.addEventListener('pointerdown',e=>{
+            e.preventDefault();e.stopPropagation();
+            const i=pg.imageBoxes.indexOf(ibox);if(i>=0)pg.imageBoxes.splice(i,1);
+            el.remove();scheduleThumbRedraw();
+        });
+        el.appendChild(del);
+        const resize=document.createElement('span');
+        resize.className='page-image-box-resize';resize.title=T.modalImageResizeTitle;
+        el.appendChild(resize);
+        let drag=null;
+        function onMove(e){
+            if(!drag)return;
+            const dx=(e.clientX-drag.mx)/MODAL_SCALE;
+            const dy=(e.clientY-drag.my)/MODAL_SCALE;
+            if(drag.mode==='move'){
+                ibox.x=Math.max(0,drag.bx+dx);
+                ibox.y=Math.max(0,drag.by+dy);
+            }else if(drag.mode==='resize'){
+                const ratio=ibox.naturalH/ibox.naturalW;
+                let nw=Math.max(20,drag.bw+dx);
+                ibox.w=nw;ibox.h=nw*ratio;
+            }
+            applyStyle();
+        }
+        function onUp(){
+            document.removeEventListener('pointermove',onMove);
+            document.removeEventListener('pointerup',onUp);
+            document.removeEventListener('pointercancel',onUp);
+            drag=null;scheduleThumbRedraw();
+        }
+        el.addEventListener('pointerdown',e=>{
+            if(e.target===del||e.target===resize)return;
+            e.preventDefault();e.stopPropagation();
+            drag={mode:'move',mx:e.clientX,my:e.clientY,bx:ibox.x,by:ibox.y};
+            document.addEventListener('pointermove',onMove);
+            document.addEventListener('pointerup',onUp);
+            document.addEventListener('pointercancel',onUp);
+        });
+        resize.addEventListener('pointerdown',e=>{
+            e.preventDefault();e.stopPropagation();
+            drag={mode:'resize',mx:e.clientX,my:e.clientY,bw:ibox.w,bh:ibox.h};
+            document.addEventListener('pointermove',onMove);
+            document.addEventListener('pointerup',onUp);
+            document.addEventListener('pointercancel',onUp);
+        });
+        return el;
+    }
+    pg.imageBoxes.forEach(b=>imageLayer.appendChild(makeImageBoxEl(b)));
+    function applyBoxStyleToEl(el,box){
+        el.style.left=(box.x*MODAL_SCALE)+'px';
+        el.style.top=(box.y*MODAL_SCALE)+'px';
+        el.style.fontSize=(box.size*MODAL_SCALE)+'px';
+        el.style.color=box.color||'#222';
+        el.style.fontWeight=box.bold?'bold':'normal';
+        el.style.textDecoration=box.underline?'underline':'none';
+        el.style.textAlign=box.align||'left';
+        el.style.backgroundColor=box.bg||'';
+    }
     function makeBoxEl(box){
         const el=document.createElement('div');
         el.className='page-text-box';
         el.dataset.id=box.id;
-        el.style.left=(box.x*MODAL_SCALE)+'px';
-        el.style.top=(box.y*MODAL_SCALE)+'px';
-        el.style.fontSize=(box.size*MODAL_SCALE)+'px';
-        el.style.color=box.color;
+        applyBoxStyleToEl(el,box);
         const content=document.createElement('div');
         content.className='page-text-box-content';
         content.contentEditable='true';
@@ -308,12 +733,15 @@ async function openPageEditor(pg){
         el.appendChild(content);
         const del=document.createElement('span');
         del.className='page-text-box-del';del.textContent='✕';
-        del.addEventListener('mousedown',e=>{
+        del.addEventListener('pointerdown',e=>{
             e.preventDefault();e.stopPropagation();
             const i=pg.textBoxes.indexOf(box);if(i>=0)pg.textBoxes.splice(i,1);
+            if(_focusedBox===box)_focusedBox=null;
             el.remove();
         });
         el.appendChild(del);
+        const grip=document.createElement('span');
+        grip.className='page-text-box-grip';grip.textContent='⤧';
         let drag=null;
         function onMove(e){
             if(!drag)return;
@@ -325,44 +753,86 @@ async function openPageEditor(pg){
             el.style.left=(box.x*MODAL_SCALE)+'px';
             el.style.top=(box.y*MODAL_SCALE)+'px';
         }
-        function onUp(){
+        function onUp(e){
             const wasDrag=drag&&drag.moved;
+            const target=drag&&drag.target;const ptrId=drag&&drag.ptrId;
             if(drag)el.classList.remove('dragging');
             drag=null;
-            document.removeEventListener('mousemove',onMove);
-            document.removeEventListener('mouseup',onUp);
+            if(target&&ptrId!=null&&target.releasePointerCapture)try{target.releasePointerCapture(ptrId)}catch(_){}
+            document.removeEventListener('pointermove',onMove);
+            document.removeEventListener('pointerup',onUp);
+            document.removeEventListener('pointercancel',onUp);
             if(!wasDrag){
                 content.focus();
                 const range=document.createRange();range.selectNodeContents(content);range.collapse(false);
                 const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
             }
         }
-        el.addEventListener('mousedown',e=>{
+        function startDrag(e,target){
+            if(target.setPointerCapture)try{target.setPointerCapture(e.pointerId)}catch(_){}
+            drag={mx:e.clientX,my:e.clientY,bx:box.x,by:box.y,moved:false,target,ptrId:e.pointerId};
+            document.addEventListener('pointermove',onMove);
+            document.addEventListener('pointerup',onUp);
+            document.addEventListener('pointercancel',onUp);
+        }
+        // 좌상단 핸들 — focus 여부 무관하게 드래그 가능
+        grip.addEventListener('pointerdown',e=>{
+            e.preventDefault();e.stopPropagation();
+            if(e.shiftKey){toggleMultiSel(box,el);return}
+            clearMultiSel();
+            _focusedBox=box;syncToolbarFromOpts(box);refreshFormatVisibility();
+            startDrag(e,grip);
+        });
+        el.appendChild(grip);
+        el.addEventListener('pointerdown',e=>{
             if(e.target===del||e.target===content||content.contains(e.target))return;
             if(document.activeElement===content)return;
             e.preventDefault();e.stopPropagation();
-            drag={mx:e.clientX,my:e.clientY,bx:box.x,by:box.y,moved:false};
-            document.addEventListener('mousemove',onMove);
-            document.addEventListener('mouseup',onUp);
+            if(e.shiftKey){toggleMultiSel(box,el);return}
+            clearMultiSel();
+            _focusedBox=box;syncToolbarFromOpts(box);refreshFormatVisibility();
+            startDrag(e,el);
         });
-        // 박스 본문이 비어 있을 땐 본문 클릭이 곧 포커스이지만, 본문이 채워졌어도 드래그 가능해야 자연스러우므로
-        // content 영역에 별도 mousedown 처리: focus 안 됐으면 drag 우선
-        content.addEventListener('mousedown',e=>{
-            if(document.activeElement===content)return; // 이미 편집 중이면 정상 텍스트 선택
+        // 본문 클릭: 포커스 안 됐을 땐 드래그 우선, 포커스 됐으면 정상 텍스트 선택
+        content.addEventListener('pointerdown',e=>{
+            if(document.activeElement===content)return;
             e.preventDefault();e.stopPropagation();
-            drag={mx:e.clientX,my:e.clientY,bx:box.x,by:box.y,moved:false};
-            document.addEventListener('mousemove',onMove);
-            document.addEventListener('mouseup',onUp);
+            if(e.shiftKey){toggleMultiSel(box,el);return}
+            clearMultiSel();
+            _focusedBox=box;syncToolbarFromOpts(box);refreshFormatVisibility();
+            startDrag(e,content);
         });
+        content.addEventListener('focus',()=>{
+            _focusedBox=box;
+            syncToolbarFromOpts(box);
+            refreshFormatVisibility();
+        });
+        content.addEventListener('input',()=>{box.text=content.textContent});
         content.addEventListener('blur',()=>{
             box.text=content.textContent;
-            if(!box.text.trim()){
-                const i=pg.textBoxes.indexOf(box);if(i>=0)pg.textBoxes.splice(i,1);
-                el.remove();
-            }
+            // 빈 박스 자동 삭제는 close 시점으로 미룸 (툴바 클릭 시 박스 살아있어야 색/굵기/정렬 적용 가능)
         });
         content.addEventListener('keydown',e=>{
-            if(e.key==='Escape'){e.preventDefault();content.blur()}
+            if(e.key==='Escape'){e.preventDefault();content.blur();return}
+            // Ctrl/Cmd + D → 박스 복제 (오프셋 위치)
+            if((e.ctrlKey||e.metaKey)&&(e.key==='d'||e.key==='D')){
+                e.preventDefault();
+                const offset=20;
+                const newBox={id:genBoxId(),text:box.text||content.textContent,x:box.x+offset,y:box.y+offset,size:box.size,color:box.color,bold:box.bold,underline:box.underline,align:box.align,bg:box.bg};
+                pg.textBoxes.push(newBox);
+                const newEl=makeBoxEl(newBox);
+                textLayer.appendChild(newEl);
+                const newContent=newEl.querySelector('.page-text-box-content');
+                if(newContent){newContent.focus();const r=document.createRange();r.selectNodeContents(newContent);r.collapse(false);const s=window.getSelection();s.removeAllRanges();s.addRange(r)}
+                return;
+            }
+            // Ctrl/Cmd + Backspace → 박스 삭제
+            if((e.ctrlKey||e.metaKey)&&(e.key==='Backspace'||e.key==='Delete')){
+                e.preventDefault();
+                const i=pg.textBoxes.indexOf(box);if(i>=0)pg.textBoxes.splice(i,1);
+                el.remove();
+                return;
+            }
             e.stopPropagation();
         });
         return el;
@@ -370,26 +840,87 @@ async function openPageEditor(pg){
     pg.textBoxes.forEach(b=>textLayer.appendChild(makeBoxEl(b)));
 
     bigCanvas.addEventListener('click',e=>{
-        const tm=getTextModeOptions();
-        if(!tm.textModeOn)return;
+        if(!_textOpts.addMode){
+            // addMode 아닐 때: 빈 영역 클릭 = 박스 선택 해제
+            _focusedBox=null;
+            clearMultiSel();
+            syncToolbarFromOpts(_textOpts);
+            refreshFormatVisibility();
+            return;
+        }
         const rect=bigCanvas.getBoundingClientRect();
-        const cx=(e.clientX-rect.left)*(bigCanvas.width/rect.width)/MODAL_SCALE;
-        const cy=(e.clientY-rect.top)*(bigCanvas.height/rect.height)/MODAL_SCALE;
-        const box={id:genBoxId(),text:'',x:cx,y:cy,size:tm.textSize,color:tm.textColor};
+        const cx=(e.clientX-rect.left)/MODAL_SCALE;
+        const cy=(e.clientY-rect.top)/MODAL_SCALE;
+        const box={id:genBoxId(),text:'',x:cx,y:cy,size:_textOpts.size,color:_textOpts.color,bold:_textOpts.bold,underline:_textOpts.underline,align:_textOpts.align,bg:_textOpts.bg};
         pg.textBoxes.push(box);
         const el=makeBoxEl(box);
         textLayer.appendChild(el);
-        el.focus();
+        const content=el.querySelector('.page-text-box-content');
+        if(content){
+            content.focus();
+            const range=document.createRange();range.selectNodeContents(content);range.collapse(false);
+            const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+        }
     });
-    bigCanvas.style.cursor=getTextModeOptions().textModeOn?'text':'default';
+    refreshAddBtn();
 
     function close(){
-        document.querySelectorAll('.page-text-box').forEach(el=>el.blur());
+        // 모든 박스 blur (텍스트 동기화)
+        textLayer.querySelectorAll('.page-text-box-content').forEach(c=>{
+            if(document.activeElement===c)c.blur();
+        });
+        // 빈 박스 일괄 정리
+        if(pg.textBoxes&&pg.textBoxes.length){
+            for(let i=pg.textBoxes.length-1;i>=0;i--){
+                if(!pg.textBoxes[i].text||!pg.textBoxes[i].text.trim()){
+                    pg.textBoxes.splice(i,1);
+                }
+            }
+        }
+        _focusedBox=null;
+        _textOpts.addMode=false;
         overlay.remove();
         document.removeEventListener('keydown',onKey);
         scheduleThumbRedraw();
     }
-    function onKey(e){if(e.key==='Escape'&&!e.target.closest('.page-text-box'))close()}
+    // 페이지 네비게이션 (좌우 화살표)
+    const curIdx=editPages.indexOf(pg);
+    async function navigate(delta){
+        const newIdx=curIdx+delta;
+        if(newIdx<0||newIdx>=editPages.length)return;
+        // 옛 overlay 정리(textBoxes 동기화 + 빈 박스 제거)만 하고 overlay는 유지
+        textLayer.querySelectorAll('.page-text-box-content').forEach(c=>{
+            if(document.activeElement===c)c.blur();
+        });
+        if(pg.textBoxes&&pg.textBoxes.length){
+            for(let i=pg.textBoxes.length-1;i>=0;i--){
+                if(!pg.textBoxes[i].text||!pg.textBoxes[i].text.trim()){
+                    pg.textBoxes.splice(i,1);
+                }
+            }
+        }
+        _focusedBox=null;_textOpts.addMode=false;
+        document.removeEventListener('keydown',onKey);
+        const oldOverlay=overlay;
+        await openPageEditor(editPages[newIdx]);
+        oldOverlay.remove();
+        scheduleThumbRedraw();
+    }
+    const prevBtn=document.createElement('span');prevBtn.className='page-preview-nav page-preview-prev';prevBtn.innerHTML='‹';
+    if(curIdx<=0)prevBtn.classList.add('disabled');
+    prevBtn.addEventListener('click',e=>{e.stopPropagation();if(!prevBtn.classList.contains('disabled'))navigate(-1)});
+    overlay.appendChild(prevBtn);
+    const nextBtn=document.createElement('span');nextBtn.className='page-preview-nav page-preview-next';nextBtn.innerHTML='›';
+    if(curIdx>=editPages.length-1)nextBtn.classList.add('disabled');
+    nextBtn.addEventListener('click',e=>{e.stopPropagation();if(!nextBtn.classList.contains('disabled'))navigate(1)});
+    overlay.appendChild(nextBtn);
+    function onKey(e){
+        const inEditable=e.target.closest('.page-text-box')||e.target.matches('input,select,textarea');
+        if(e.key==='Escape'&&!e.target.closest('.page-text-box')){close();return}
+        if(inEditable)return;
+        if(e.key==='ArrowLeft')navigate(-1);
+        else if(e.key==='ArrowRight')navigate(1);
+    }
     closeBtn.addEventListener('click',close);
     overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
     document.addEventListener('keydown',onKey);
@@ -426,15 +957,31 @@ function renderEditGrid(){
         const color=getFileColor(pg.sourceFile);
         const div=document.createElement('div');div.className='page-thumb'+(pg.selected?' selected':'');div.draggable=true;
         div.style.borderColor=pg.selected?color:'';
-        div.innerHTML=`<div class="page-thumb-check" style="background:${color}">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" title="${T.rotateTitle}">↻</button><button class="page-thumb-btn" data-act="preview" title="${T.previewTitle}">⤢</button></div><div class="page-thumb-color" style="background:${color}"></div>`;
+        div.setAttribute('role','checkbox');
+        div.setAttribute('tabindex','0');
+        div.setAttribute('aria-checked',pg.selected?'true':'false');
+        div.setAttribute('aria-label',`${i+1}페이지`);
+        div.innerHTML=`<div class="page-thumb-check" style="background:${color}">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" title="${T.rotateTitle}" aria-label="${T.rotateTitle}">↻</button><button class="page-thumb-btn" data-act="preview" title="${T.previewTitle}" aria-label="${T.previewTitle}">⤢</button></div><div class="page-thumb-color" style="background:${color}"></div>`;
         const c=renderThumbCanvas(pg);
         div.insertBefore(c,div.firstChild);
         const num=document.createElement('div');num.className='page-thumb-num';num.textContent=(i+1)+'p';div.appendChild(num);
         div.querySelector('[data-act="rotate"]').addEventListener('click',e=>{
             e.stopPropagation();
+            // 회전 전 페이지 크기 (현재 보이는 방향 기준)
+            const rotBefore=pg.rotation%360;
+            const swapped=rotBefore===90||rotBefore===270;
+            const oldW=swapped?pg.pageH:pg.pageW;
+            const oldH=swapped?pg.pageW:pg.pageH;
+            // 90° 시계방향 변환: 박스 좌상단을 점으로 취급
+            // (x, y) → (oldH - y - approxH, x), 박스 폭/높이는 size로 근사
             if(pg.textBoxes&&pg.textBoxes.length){
-                if(!confirm(T.rotateClearsBoxes))return;
-                pg.textBoxes=[];
+                pg.textBoxes.forEach(b=>{
+                    const approxH=b.size*1.2;
+                    const nx=oldH-b.y-approxH;
+                    const ny=b.x;
+                    b.x=Math.max(0,nx);
+                    b.y=Math.max(0,ny);
+                });
             }
             pg.rotation=(pg.rotation+90)%360;
             const newC=renderThumbCanvas(pg);
@@ -445,7 +992,9 @@ function renderEditGrid(){
             e.stopPropagation();
             openPageEditor(pg);
         });
-        div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate'))return;pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';updateEditStatus();scheduleThumbRedraw()});
+        function togglePageSel(){pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';div.setAttribute('aria-checked',pg.selected?'true':'false');updateEditStatus();scheduleThumbRedraw()}
+        div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate')||e.target.closest('.page-thumb-btn'))return;togglePageSel()});
+        div.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();togglePageSel()}});
         div.addEventListener('dragstart',e=>{editDragIdx=i;div.classList.add('dragging-thumb');e.dataTransfer.effectAllowed='move'});
         div.addEventListener('dragend',()=>{div.classList.remove('dragging-thumb');grid.querySelectorAll('.drag-over-thumb').forEach(el=>el.classList.remove('drag-over-thumb'));editDragIdx=null});
         div.addEventListener('dragover',e=>{e.preventDefault();if(editDragIdx!==null&&editDragIdx!==i)div.classList.add('drag-over-thumb')});
@@ -466,7 +1015,6 @@ function renderEditGrid(){
         });
         return btn;
     }
-    grid.insertBefore(makeAddBtn(),grid.firstChild);
     grid.appendChild(makeAddBtn());
     fi.onchange=e=>{handleEditFiles(Array.from(e.target.files));fi.value=''};
     updateEditStatus();
@@ -478,7 +1026,11 @@ function updateEditStatus(){
     const msg=sel===0?T.editStatusSelect:sel===total?T.editStatusAllSelected:T.editStatusSome(sel,total);
     document.getElementById('editStatus').textContent=msg;
     const btn=document.getElementById('editSaveBtn');
-    btn.disabled=sel===0;btn.textContent=sel?T.btnSavePages(sel):T.btnSave;
+    btn.disabled=sel===0;
+    if(!sel)btn.textContent=T.btnSave;
+    else if(editSourceNames.length>=2)btn.textContent=T.btnMergeSave(sel);
+    else if(sel<total)btn.textContent=T.btnExtractSave(sel);
+    else btn.textContent=T.btnSavePages(sel);
 }
 
 document.getElementById('editSelectToggle').addEventListener('click',()=>{
@@ -486,12 +1038,10 @@ document.getElementById('editSelectToggle').addEventListener('click',()=>{
     editPages.forEach(p=>p.selected=!allSelected);renderEditGrid();
     document.getElementById('editSelectToggle').textContent=!allSelected?T.deselectAll:T.selectAll;
 });
-document.getElementById('editToggleZoom').addEventListener('click',()=>{const g=document.getElementById('editPageGrid');g.classList.toggle('zoomed');document.getElementById('editToggleZoom').textContent=g.classList.contains('zoomed')?T.zoomOut:T.zoomIn});
 
 // Toolbar: stamp 버튼 ↔ 패널 토글, 한 번에 한 패널만 노출
 const STAMP_TABS=[
     {btn:'editTbPagenum',panel:'editPanelPagenum',enable:'editPagenumEnable'},
-    {btn:'editTbText',panel:'editPanelText',enable:'editTextEnable'},
     {btn:'editTbMark',panel:'editPanelMark',enable:'editMarkEnable'},
 ];
 function setActiveStampTab(target){
@@ -539,7 +1089,7 @@ setupDropZone('editMarkImgZone','editMarkImgInput',async files=>{
 },{accept:'image/*'});
 
 // 옵션 변경 → 썸네일 redraw
-['editPanelPagenum','editPanelText','editPanelMark'].forEach(id=>{
+['editPanelPagenum','editPanelMark'].forEach(id=>{
     const panel=document.getElementById(id);if(!panel)return;
     panel.addEventListener('input',scheduleThumbRedraw);
     panel.addEventListener('change',scheduleThumbRedraw);
@@ -603,7 +1153,17 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
                 copied.drawImage(markImgEmbedded,{x,y,width:w,height:h});
             }
             const needsFont=pagenumOn||(pg.textBoxes&&pg.textBoxes.length);
-            if(needsFont&&!font)font=await embedPretendard(doc);
+            if(needsFont&&!font){
+                font=await embedPretendard(doc);
+                if(_koreanFontCache==='FAIL'){
+                    // 한글이 포함된 텍스트가 있을 때만 사용자에게 알림
+                    const hasKorean=(pg.textBoxes||[]).some(b=>/[ㄱ-힝]/.test(b.text||''));
+                    if(hasKorean){
+                        const errEl=document.getElementById('editError');
+                        if(errEl)showError(errEl,T.fontFallbackWarn);
+                    }
+                }
+            }
             // 페이지번호 (위 레이어)
             if(pagenumOn){
                 const num=pagenumStart+i;
@@ -617,15 +1177,70 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
                 else{x=(width-tw)/2;y=height-30}
                 copied.drawText(label,{x,y,size:sz,font,color:PDFLib.rgb(.3,.3,.3)});
             }
+            // 이미지 박스들 (페이지에 직접 추가)
+            if(pg.imageBoxes&&pg.imageBoxes.length){
+                for(const ib of pg.imageBoxes){
+                    try{
+                        // dataUrl → bytes
+                        const m=ib.dataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
+                        if(!m)continue;
+                        const mime=m[1];const bin=atob(m[2]);
+                        const arr=new Uint8Array(bin.length);
+                        for(let k=0;k<bin.length;k++)arr[k]=bin.charCodeAt(k)&0xff;
+                        const embedded=mime==='image/png'?await doc.embedPng(arr):await doc.embedJpg(arr);
+                        copied.drawImage(embedded,{
+                            x:ib.x,
+                            y:height-ib.y-ib.h,
+                            width:ib.w,
+                            height:ib.h
+                        });
+                    }catch(_){}
+                }
+            }
             // 텍스트 박스들 (페이지에 직접 추가)
             if(pg.textBoxes&&pg.textBoxes.length){
                 pg.textBoxes.forEach(b=>{
                     if(!b.text||!b.text.trim())return;
                     const lines=b.text.split('\n');
-                    const c=PDFLib.rgb(parseInt(b.color.slice(1,3),16)/255,parseInt(b.color.slice(3,5),16)/255,parseInt(b.color.slice(5,7),16)/255);
+                    const lineH=b.size*1.2;
+                    const widths=lines.map(l=>font.widthOfTextAtSize(l,b.size));
+                    const maxW=Math.max(0,...widths);
+                    const totalH=lineH*lines.length;
+                    const align=b.align||'left';
+                    // 배경 사각형
+                    if(b.bg){
+                        const padX=4,padY=2;
+                        const bgC=hexToPdfRgb(b.bg);
+                        copied.drawRectangle({
+                            x:b.x-padX,
+                            y:height-(b.y+totalH)-padY,
+                            width:maxW+padX*2,
+                            height:totalH+padY*2,
+                            color:PDFLib.rgb(bgC.r,bgC.g,bgC.b)
+                        });
+                    }
+                    const txtC=hexToPdfRgb(b.color||'#222');
                     lines.forEach((line,li)=>{
-                        const yPdf=height-(b.y+b.size+li*b.size*1.2);
-                        copied.drawText(line,{x:b.x,y:yPdf,size:b.size,font,color:c});
+                        const lineW=widths[li];
+                        let xPdf=b.x;
+                        if(align==='center')xPdf+=(maxW-lineW)/2;
+                        else if(align==='right')xPdf+=(maxW-lineW);
+                        const yPdf=height-(b.y+b.size+li*lineH);
+                        copied.drawText(line,{x:xPdf,y:yPdf,size:b.size,font,color:PDFLib.rgb(txtC.r,txtC.g,txtC.b)});
+                        // 가짜 굵게 (한글 폰트는 단일 weight라 한 픽셀 옆에 한 번 더 그려서 효과)
+                        if(b.bold){
+                            copied.drawText(line,{x:xPdf+0.4,y:yPdf,size:b.size,font,color:PDFLib.rgb(txtC.r,txtC.g,txtC.b)});
+                        }
+                        // 밑줄
+                        if(b.underline&&line.length){
+                            const ulThickness=Math.max(0.5,b.size*0.06);
+                            copied.drawLine({
+                                start:{x:xPdf,y:yPdf-ulThickness*1.4},
+                                end:{x:xPdf+lineW,y:yPdf-ulThickness*1.4},
+                                thickness:ulThickness,
+                                color:PDFLib.rgb(txtC.r,txtC.g,txtC.b)
+                            });
+                        }
                     });
                 });
             }
@@ -641,7 +1256,7 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
 });
 
 document.getElementById('editClearBtn').addEventListener('click',()=>{
-    editPages=[];editSourceNames=[];editSourceFiles=[];editCancelled.clear();
+    editPages=[];editSourceNames=[];editSourceFiles=[];editCancelled.clear();_imgCache.clear();
     document.getElementById('editWorkspace').style.display='none';
     document.getElementById('editDropZone').style.display='';
     document.getElementById('editPageGrid').innerHTML='';
@@ -755,7 +1370,7 @@ function resetTool(id){
     view.querySelectorAll('[id$="PageContainer"]').forEach(c=>c.innerHTML='');
     if(id==='convert'){imgFiles=[];document.getElementById('img2pdfPreview').innerHTML='';document.getElementById('img2pdfActions').style.display='none';document.getElementById('img2pdfSizeGroup').style.display='none'}
     if(id==='edit'){
-        editPages=[];editSourceNames=[];editSourceFiles=[];
+        editPages=[];editSourceNames=[];editSourceFiles=[];_imgCache.clear();
         document.getElementById('editWorkspace').style.display='none';
         document.getElementById('editPageGrid').innerHTML='';
         document.getElementById('editFileList').innerHTML='';

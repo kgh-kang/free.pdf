@@ -1,5 +1,83 @@
 # Changelog
 
+## [2026-04-29] — 텍스트/이미지 편집 강화 + 7개 페르소나 평가 + P0 5건 적용
+
+### 텍스트 편집 (모달 단일 진입점)
+- 메인 툴바의 [T 텍스트] 패널 제거, 모달 안에 떠다니는 툴바로 통합
+- 모달 툴바 구성: `[+ 텍스트] [+ 이미지] | 크기 색상 [B] [U] | 정렬 3종 | 배경 | (다중선택 시) 박스 정렬 6방향`
+- 박스 데이터 모델 확장: `{bold, underline, align, bg}` 추가
+- 인라인 스타일 편집: 박스 클릭 → 툴바가 그 박스 설정으로 sync, 툴바 변경 → 박스 즉시 갱신
+- 툴바 배경 제거 + 추가 버튼 폭 통일 (min-width:96px)
+- 서식 옵션은 addMode/박스 선택 시에만 표시 (기본은 [+ 텍스트] [+ 이미지]만)
+
+### 이미지 박스 (Adobe 스타일)
+- 모달 [+ 이미지] 클릭 → 파일 선택 → 페이지 가운데 자동 배치
+- 호버 시 우상단 ✕ 삭제 버튼, 우하단 보라 핸들로 비율 유지 리사이즈
+- 별도 imageLayer DOM (textLayer와 분리, z-index 차등)
+- PDF 저장 시 `embedPng/embedJpg` + `drawImage`
+
+### 인터랙션
+- **다중 박스 선택**: Shift+클릭 토글, 노란 outline 표시
+- **박스 정렬 6방향**: 좌/가운데/우 + 위/가운데/아래 (다중 선택 2개 이상일 때만 자동 표시)
+- **키보드 단축키**: 박스 편집 중 `Ctrl+D` 복제, `Ctrl+Backspace` 삭제, `ESC` blur
+- **페이지 좌우 네비**: 모달 양쪽 ‹ › 화살표 + ←/→ 키, 첫/마지막 페이지에서 자동 비활성
+- **In-place 페이지 전환**: 새 모달 렌더 완료 후 옛 overlay 제거 → 메인 화면 노출 깜빡임 X
+- **터치 지원**: mouse → pointer 이벤트 통합, setPointerCapture로 드래그 안정화
+- **회전 시 박스 좌표 자동 변환**: 90° 시계 변환식 (textBoxes만, imageBoxes는 미지원)
+
+### 색상 입력
+- 텍스트 색상/배경색에 native `<input type="color">` picker 추가 (24bit RGB 임의 선택)
+- select와 picker 양방향 동기화
+
+### 폰트 (Pretendard → NanumGothic 교체)
+- `Pretendard-Regular.otf`(CFF) → `NanumGothic-Regular.ttf`(TrueType)
+  - fontkit이 Pretendard CFF 파싱 시 `topDict` 에러 발생, TTF는 안정
+- `subset:false`로 임베드 (subset이 한글 일부 글자 누락시키는 이슈 회피)
+- 가짜 굵게(fake bold): 0.4pt 옆으로 한 번 더 그려서 효과
+- 밑줄: HTML/Canvas/PDF 3곳 모두 렌더링 (PDF는 `drawLine`)
+- file:// 환경 대응: base64 lazy load (`korean-base64.js`, ~2.7MB) — `<script>` 태그로 동적 로드, fetch 차단 우회
+
+### 화질 / 레이아웃
+- 미리보기 모달: `MODAL_SCALE × max(2, dpr)` × 페이지 sharpening (캔버스 픽셀 ~3-4배)
+- 썸네일: `THUMB_SCALE 0.5 → 0.85` + dpr 곱 적용
+- 페이지 그리드: 4열 → 3열 (가독성 ↑)
+- 사이드바: 1400px 이상에서 main 영역 외부 우측 floating (page-grid 공간 침범 X)
+- 파일 클릭: "그 파일 페이지만 토글" (기존 "그것만 select" → 직관 반대였던 동작 수정)
+- 페이지 그리드 맨 앞 `+ 추가` 박스 제거 (상단 툴바와 중복), 끝에만 유지
+
+### 메인 툴바 / 헤더
+- divider 제거 + 균일 8px gap
+- 전체 선택/해제 토글을 메인 툴바 우측으로 이동 (page-grid-controls 통째 제거)
+- "크게 보기" 버튼 삭제
+- tool-desc 아래 `tool-hint` 추가: "각 페이지 우측 상단의 ⤢ 버튼으로 크게 보면 텍스트·이미지 추가 가능"
+- 뒤로가기 버튼: 흰색 pill ("← 돌아가기")
+- 미리보기 안내문 흰색 가독성 ↑
+- 파일 목록 sidebar-title 흰색 + 13px 굵게
+
+### CSP / 환경
+- `connect-src`에 `unpkg.com`, `cdn.jsdelivr.net`, `cdnjs.cloudflare.com` 추가 (sourcemap 차단 해소)
+- `worker-src blob:` 추가 (pdf.js worker)
+- `font-src`에 jsdelivr/gstatic 허용
+- file:// 환경에서는 로컬 fetch 시도 자체를 건너뛰어 콘솔 노이즈 제거
+- GoatCounter `https://` 명시 (file:// 프로토콜 오류 방지)
+
+### 평가 (P0 5건 적용)
+- 7개 페르소나 평가 진행 (첫 방문자/파워유저/UI·UX/경쟁/모바일/코드/보안) → `EVALUATION.md`에 종합
+- **파일명 XSS 패치**: `escapeHtml` 강화(`"`/`'`/`&` 모두 처리) + 파일 리스트 innerHTML escape
+- **메모리 누수 방지**: `pdf.destroy()` 호출 + `_imgCache.clear()` (resetTool/editClearBtn)
+- **저장 버튼 라벨 동적화**: 파일 2개+ → "합쳐서 저장", 1개+일부 선택 → "추출해서 저장"
+- **색대비 개선**: `#555` → `#7a7a8a` 10곳 일괄 치환 + page-thumb-check ✓ 표시 (색-only 의존 제거)
+- **접근성 마크업**: 카드 `<button>` + aria-label, 드롭존 `role="button" tabindex="0"` + Enter/Space 키 처리, 페이지 썸네일 `role="checkbox" aria-checked` + 키보드 토글, focus-visible 통일
+
+### 알려진 이슈 / 내일 작업
+- Undo/Redo 미지원 (P0)
+- 모바일 모달 320~600px에서 툴바 wrap으로 캔버스 영역 잠식 (P0)
+- 회전 시 imageBoxes 좌표 변환 미지원
+- `openPageEditor` 520줄 단일 함수 (기술 부채)
+- WCAG 2.1 AA 점수 3.5/10 → P0 적용 후 ~5.0/10 추정
+
+---
+
 ## [Unreleased]
 
 ### 구조 변경

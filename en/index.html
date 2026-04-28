@@ -6,7 +6,7 @@
     <title>free.pdf — Edit · Convert · Watermark</title>
     <link rel="alternate" hreflang="ko" href="../">
     <link rel="alternate" hreflang="en" href="./">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self'; form-action 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; form-action 'none';">
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" integrity="sha384-2p6U+1mmqF10USehFeRiyG2ESG9FwIqN+jxULn5w9jjQIihSn9Pt13dVCn/Hawjn" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
@@ -31,16 +31,16 @@
 
 <!-- HOME -->
 <div class="view active" id="view-home"><div class="tool-grid">
-    <div class="tool-card" onclick="showTool('edit')"><div class="tool-card-kicker">EDIT</div><div class="tool-card-big">EDIT</div><h3>PDF Edit</h3><div class="tool-card-tags"><span>Merge</span><span>Extract</span><span>Delete</span><span>Rotate</span></div></div>
-    <div class="tool-card" onclick="showTool('convert')"><div class="tool-card-kicker">CONVERT</div><div class="tool-card-big">CON<br>VERT</div><h3>Image Convert</h3><div class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></div></div>
-    <div class="tool-card" onclick="showTool('text')"><div class="tool-card-kicker">TEXT</div><div class="tool-card-big">TEXT</div><h3>Text Extract</h3><div class="tool-card-tags"><span>Copy text</span><span>Save TXT</span></div></div>
+    <button type="button" class="tool-card" onclick="showTool('edit')" aria-label="PDF Edit — merge, extract, delete, rotate"><span class="tool-card-kicker">EDIT</span><span class="tool-card-big">EDIT</span><h3>PDF Edit</h3><span class="tool-card-tags"><span>Merge</span><span>Extract</span><span>Delete</span><span>Rotate</span></span></button>
+    <button type="button" class="tool-card" onclick="showTool('convert')" aria-label="Image convert — images to PDF, PDF to images"><span class="tool-card-kicker">CONVERT</span><span class="tool-card-big">CON<br>VERT</span><h3>Image Convert</h3><span class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></span></button>
+    <button type="button" class="tool-card" onclick="showTool('text')" aria-label="Text extract — copy text or save as TXT"><span class="tool-card-kicker">TEXT</span><span class="tool-card-big">TEXT</span><h3>Text Extract</h3><span class="tool-card-tags"><span>Copy text</span><span>Save TXT</span></span></button>
 </div></div>
 
 <!-- PDF Edit -->
 <div class="view" id="view-edit">
     <button class="back-btn" onclick="showHome()">← Back</button>
     <div class="tool-title">PDF Edit</div>
-    <div class="tool-desc">Select pages, reorder, rotate, then save</div>
+    <div class="tool-desc">Select pages, reorder, rotate, then save<br><span class="tool-hint">Click the ⤢ button on each page to add text and images</span></div>
     <div class="drop-zone" id="editDropZone"><div class="drop-zone-icon">EDIT</div><div class="drop-zone-text">Drop a PDF or click to choose</div><div class="drop-zone-sub">Multiple files OK · You can add more later</div></div>
     <input type="file" id="editFileInput" accept=".pdf" multiple>
     <div class="error-msg" id="editError"></div>
@@ -55,10 +55,9 @@
             <div class="edit-main">
                 <div class="edit-toolbar" id="editToolbar">
                     <button class="edit-tb-btn" id="editTbAddFile"><span class="edit-tb-icon">+</span> File</button>
-                    <div class="edit-tb-divider"></div>
                     <button class="edit-tb-btn" id="editTbPagenum"><span class="edit-tb-icon">#</span> Page numbers <span class="edit-tb-check">✓</span></button>
-                    <button class="edit-tb-btn" id="editTbText"><span class="edit-tb-icon">T</span> Text <span class="edit-tb-check">✓</span></button>
                     <button class="edit-tb-btn" id="editTbMark"><span class="edit-tb-icon">⊕</span> Watermark <span class="edit-tb-check">✓</span></button>
+                    <button class="edit-tb-btn edit-tb-right" id="editSelectToggle">Deselect all</button>
                 </div>
                 <div class="edit-stamp-panel" id="editPanelPagenum" style="display:none">
                     <label class="edit-panel-toggle"><input type="checkbox" id="editPagenumEnable"> <span>Apply page numbers</span></label>
@@ -68,16 +67,6 @@
                             <div class="form-group"><label class="form-label">Start number</label><input class="form-input" id="editPagenumStart" type="number" value="1" min="1"></div>
                         </div>
                         <div class="form-group" style="margin-bottom:0"><label class="form-label">Format</label><select class="form-select" id="editPagenumFormat"><option value="n">1, 2, 3 ...</option><option value="dash">- 1 -, - 2 - ...</option><option value="slash">1/N, 2/N ...</option></select></div>
-                    </div>
-                </div>
-                <div class="edit-stamp-panel" id="editPanelText" style="display:none">
-                    <label class="edit-panel-toggle"><input type="checkbox" id="editTextEnable"> <span>Add text mode</span></label>
-                    <div id="editTextConfig" style="display:none;margin-top:14px">
-                        <div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:14px">Click anywhere on the page in the ⤢ preview to add text at that position. Multiple boxes per page; empty boxes are removed automatically.</div>
-                        <div class="form-row">
-                            <div class="form-group"><label class="form-label">Size</label><select class="form-select" id="editTextSize"><option value="10">Small</option><option value="14" selected>Medium</option><option value="20">Large</option></select></div>
-                            <div class="form-group"><label class="form-label">Color</label><select class="form-select" id="editTextColor"><option value="#222" selected>Black</option><option value="#666">Gray</option><option value="#dc2626">Red</option></select></div>
-                        </div>
                     </div>
                 </div>
                 <div class="edit-stamp-panel" id="editPanelMark" style="display:none">
@@ -104,10 +93,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="page-grid-controls">
-                    <button class="btn btn-sm btn-secondary" id="editSelectToggle">Deselect All</button>
-                    <button class="btn btn-sm btn-secondary" id="editToggleZoom">Zoom In</button>
                 </div>
                 <div class="page-grid" id="editPageGrid"></div>
                 <input type="file" id="editInlineAddInput" accept=".pdf" multiple>
@@ -201,6 +186,8 @@ window.I18N={
     editStatusSome:(sel,total)=>`${sel} of ${total} pages selected`,
     btnSave:'Save',
     btnSavePages:sel=>`Save ${sel} pages`,
+    btnMergeSave:sel=>`Merge & save (${sel} ${sel===1?'page':'pages'})`,
+    btnExtractSave:sel=>`Extract & save (${sel} ${sel===1?'page':'pages'})`,
     btnProcessing:'Processing...',
     editProgress:(i,total)=>`Processing... (${i}/${total} pages)`,
     saveComplete:'Saved!',
@@ -219,7 +206,34 @@ window.I18N={
     pagesSelected:n=>`${n} pages selected`,
     totalPagesAll:t=>`${t} pages total (all converted if no selection)`,
     imagesDownloaded:n=>`${n} images downloaded!`,
-    rotateClearsBoxes:'Text boxes on this page will be removed. Continue rotating?'
+    rotateClearsBoxes:'Text boxes on this page will be removed. Continue rotating?',
+    fontFallbackWarn:'Korean font failed to load — Korean text may not render correctly. (Use the deployed site or run via a local server)',
+    modalPreviewNote:'This preview is for display only. The saved PDF keeps the original page quality.',
+    modalAddText:'+ Text',
+    modalAddTextActive:'✕ Done',
+    modalTextHint:'Click anywhere on the page to add text',
+    modalAddImage:'+ Image',
+    modalImageDelTitle:'Remove image',
+    modalImageResizeTitle:'Resize',
+    modalSizeLabel:'Size',
+    modalColorLabel:'Color',
+    modalBgLabel:'Background',
+    modalBoldTitle:'Bold',
+    modalUnderlineTitle:'Underline',
+    modalColorPickerTitle:'Custom text color',
+    modalBgPickerTitle:'Custom background color',
+    boxAlignLeftTitle:'Align boxes left',
+    boxAlignCenterHTitle:'Align boxes center horizontally',
+    boxAlignRightTitle:'Align boxes right',
+    boxAlignTopTitle:'Align boxes top',
+    boxAlignCenterVTitle:'Align boxes center vertically',
+    boxAlignBottomTitle:'Align boxes bottom',
+    modalAlignLeftTitle:'Align left',
+    modalAlignCenterTitle:'Align center',
+    modalAlignRightTitle:'Align right',
+    modalSizeOptions:[{v:'10',t:'Small'},{v:'14',t:'Medium'},{v:'20',t:'Large'},{v:'28',t:'X-Large'}],
+    modalColorOptions:[{v:'#222',t:'Black'},{v:'#666',t:'Gray'},{v:'#fff',t:'White'},{v:'#dc2626',t:'Red'},{v:'#2563eb',t:'Blue'},{v:'#16a34a',t:'Green'}],
+    modalBgOptions:[{v:'',t:'None'},{v:'#fef3c7',t:'Yellow'},{v:'#dbeafe',t:'Sky'},{v:'#fecaca',t:'Pink'},{v:'#000',t:'Black'},{v:'#fff',t:'White'}]
 };
 </script>
 <script src="../assets/app.js"></script>

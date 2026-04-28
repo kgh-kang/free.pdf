@@ -6,7 +6,7 @@
     <title>free.pdf — PDF 편집 · 변환 · 워터마크</title>
     <link rel="alternate" hreflang="ko" href="./">
     <link rel="alternate" hreflang="en" href="./en/">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self'; form-action 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; form-action 'none';">
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" integrity="sha384-2p6U+1mmqF10USehFeRiyG2ESG9FwIqN+jxULn5w9jjQIihSn9Pt13dVCn/Hawjn" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
@@ -31,16 +31,16 @@
 
 <!-- HOME -->
 <div class="view active" id="view-home"><div class="tool-grid">
-    <div class="tool-card" onclick="showTool('edit')"><div class="tool-card-kicker">EDIT</div><div class="tool-card-big">EDIT</div><h3>PDF 편집</h3><div class="tool-card-tags"><span>합치기</span><span>추출</span><span>삭제</span><span>회전</span></div></div>
-    <div class="tool-card" onclick="showTool('convert')"><div class="tool-card-kicker">CONVERT</div><div class="tool-card-big">CON<br>VERT</div><h3>이미지 변환</h3><div class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></div></div>
-    <div class="tool-card" onclick="showTool('text')"><div class="tool-card-kicker">TEXT</div><div class="tool-card-big">TEXT</div><h3>텍스트 추출</h3><div class="tool-card-tags"><span>텍스트 복사</span><span>TXT 저장</span></div></div>
+    <button type="button" class="tool-card" onclick="showTool('edit')" aria-label="PDF 편집 — 합치기, 추출, 삭제, 회전"><span class="tool-card-kicker">EDIT</span><span class="tool-card-big">EDIT</span><h3>PDF 편집</h3><span class="tool-card-tags"><span>합치기</span><span>추출</span><span>삭제</span><span>회전</span></span></button>
+    <button type="button" class="tool-card" onclick="showTool('convert')" aria-label="이미지 변환 — 이미지를 PDF로, PDF를 이미지로"><span class="tool-card-kicker">CONVERT</span><span class="tool-card-big">CON<br>VERT</span><h3>이미지 변환</h3><span class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></span></button>
+    <button type="button" class="tool-card" onclick="showTool('text')" aria-label="텍스트 추출 — PDF에서 텍스트 복사 및 TXT 저장"><span class="tool-card-kicker">TEXT</span><span class="tool-card-big">TEXT</span><h3>텍스트 추출</h3><span class="tool-card-tags"><span>텍스트 복사</span><span>TXT 저장</span></span></button>
 </div></div>
 
 <!-- PDF 편집 (합치기+나누기+삭제+추출+회전 통합) -->
 <div class="view" id="view-edit">
     <button class="back-btn" onclick="showHome()">← 돌아가기</button>
     <div class="tool-title">PDF 편집</div>
-    <div class="tool-desc">페이지를 선택하고, 순서를 바꾸고, 회전해서 저장하세요</div>
+    <div class="tool-desc">페이지를 선택하고, 순서를 바꾸고, 회전해서 저장하세요<br><span class="tool-hint">각 페이지 우측 상단의 ⤢ 버튼으로 크게 보면 텍스트·이미지 추가가 가능합니다</span></div>
     <div class="drop-zone" id="editDropZone"><div class="drop-zone-icon">EDIT</div><div class="drop-zone-text">PDF 파일을 드래그하거나 클릭</div><div class="drop-zone-sub">여러 파일 선택 가능 · 추가로 더 넣을 수 있습니다</div></div>
     <input type="file" id="editFileInput" accept=".pdf" multiple>
     <div class="error-msg" id="editError"></div>
@@ -55,10 +55,9 @@
             <div class="edit-main">
                 <div class="edit-toolbar" id="editToolbar">
                     <button class="edit-tb-btn" id="editTbAddFile"><span class="edit-tb-icon">+</span> 파일</button>
-                    <div class="edit-tb-divider"></div>
                     <button class="edit-tb-btn" id="editTbPagenum"><span class="edit-tb-icon">#</span> 페이지 번호 <span class="edit-tb-check">✓</span></button>
-                    <button class="edit-tb-btn" id="editTbText"><span class="edit-tb-icon">T</span> 텍스트 <span class="edit-tb-check">✓</span></button>
                     <button class="edit-tb-btn" id="editTbMark"><span class="edit-tb-icon">⊕</span> 워터마크 <span class="edit-tb-check">✓</span></button>
+                    <button class="edit-tb-btn edit-tb-right" id="editSelectToggle">전체 해제</button>
                 </div>
                 <div class="edit-stamp-panel" id="editPanelPagenum" style="display:none">
                     <label class="edit-panel-toggle"><input type="checkbox" id="editPagenumEnable"> <span>페이지 번호 적용</span></label>
@@ -68,16 +67,6 @@
                             <div class="form-group"><label class="form-label">시작 번호</label><input class="form-input" id="editPagenumStart" type="number" value="1" min="1"></div>
                         </div>
                         <div class="form-group" style="margin-bottom:0"><label class="form-label">형식</label><select class="form-select" id="editPagenumFormat"><option value="n">1, 2, 3 ...</option><option value="dash">- 1 -, - 2 - ...</option><option value="slash">1/N, 2/N ...</option></select></div>
-                    </div>
-                </div>
-                <div class="edit-stamp-panel" id="editPanelText" style="display:none">
-                    <label class="edit-panel-toggle"><input type="checkbox" id="editTextEnable"> <span>텍스트 추가 모드</span></label>
-                    <div id="editTextConfig" style="display:none;margin-top:14px">
-                        <div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:14px">미리보기 ⤢ 에서 페이지를 클릭하여 그 위치에 텍스트를 입력하세요. 한 페이지에 여러 개 추가 가능, 빈 박스는 자동 삭제됩니다.</div>
-                        <div class="form-row">
-                            <div class="form-group"><label class="form-label">크기</label><select class="form-select" id="editTextSize"><option value="10">작게</option><option value="14" selected>보통</option><option value="20">크게</option></select></div>
-                            <div class="form-group"><label class="form-label">색상</label><select class="form-select" id="editTextColor"><option value="#222" selected>검정</option><option value="#666">회색</option><option value="#dc2626">빨강</option></select></div>
-                        </div>
                     </div>
                 </div>
                 <div class="edit-stamp-panel" id="editPanelMark" style="display:none">
@@ -104,10 +93,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="page-grid-controls">
-                    <button class="btn btn-sm btn-secondary" id="editSelectToggle">전체 해제</button>
-                    <button class="btn btn-sm btn-secondary" id="editToggleZoom">크게 보기</button>
                 </div>
                 <div class="page-grid" id="editPageGrid"></div>
                 <input type="file" id="editInlineAddInput" accept=".pdf" multiple>
@@ -201,6 +186,8 @@ window.I18N={
     editStatusSome:(sel,total)=>`${total}페이지 중 ${sel}페이지 선택`,
     btnSave:'저장',
     btnSavePages:sel=>`${sel}페이지 저장`,
+    btnMergeSave:sel=>`${sel}페이지 합쳐서 저장`,
+    btnExtractSave:sel=>`${sel}페이지 추출해서 저장`,
     btnProcessing:'처리 중...',
     editProgress:(i,total)=>`처리 중... (${i}/${total}페이지)`,
     saveComplete:'저장 완료!',
@@ -219,7 +206,34 @@ window.I18N={
     pagesSelected:n=>`${n}페이지 선택됨`,
     totalPagesAll:t=>`총 ${t}페이지 (선택 안 하면 전체 변환)`,
     imagesDownloaded:n=>`${n}개 이미지 다운로드 완료!`,
-    rotateClearsBoxes:'이 페이지에 추가한 텍스트 박스가 모두 삭제됩니다. 회전을 계속할까요?'
+    rotateClearsBoxes:'이 페이지에 추가한 텍스트 박스가 모두 삭제됩니다. 회전을 계속할까요?',
+    fontFallbackWarn:'한글 폰트 로드 실패: 한글 텍스트는 정상 표시되지 않을 수 있습니다. (배포된 사이트나 로컬 서버에서 사용하세요)',
+    modalPreviewNote:'미리보기는 화면 표시용입니다. 저장 시에는 원본 PDF 화질 그대로 출력됩니다.',
+    modalAddText:'+ 텍스트',
+    modalAddTextActive:'✕ 종료',
+    modalTextHint:'페이지를 클릭하여 텍스트를 추가하세요',
+    modalAddImage:'+ 이미지',
+    modalImageDelTitle:'이미지 삭제',
+    modalImageResizeTitle:'크기 조절',
+    modalSizeLabel:'크기',
+    modalColorLabel:'색상',
+    modalBgLabel:'배경',
+    modalBoldTitle:'굵게',
+    modalUnderlineTitle:'밑줄',
+    modalColorPickerTitle:'직접 색상 선택',
+    modalBgPickerTitle:'직접 배경색 선택',
+    boxAlignLeftTitle:'박스 좌측 맞춤',
+    boxAlignCenterHTitle:'박스 가로 가운데 맞춤',
+    boxAlignRightTitle:'박스 우측 맞춤',
+    boxAlignTopTitle:'박스 상단 맞춤',
+    boxAlignCenterVTitle:'박스 세로 가운데 맞춤',
+    boxAlignBottomTitle:'박스 하단 맞춤',
+    modalAlignLeftTitle:'왼쪽 정렬',
+    modalAlignCenterTitle:'가운데 정렬',
+    modalAlignRightTitle:'오른쪽 정렬',
+    modalSizeOptions:[{v:'10',t:'작게'},{v:'14',t:'보통'},{v:'20',t:'크게'},{v:'28',t:'아주 크게'}],
+    modalColorOptions:[{v:'#222',t:'검정'},{v:'#666',t:'회색'},{v:'#fff',t:'흰색'},{v:'#dc2626',t:'빨강'},{v:'#2563eb',t:'파랑'},{v:'#16a34a',t:'초록'}],
+    modalBgOptions:[{v:'',t:'없음'},{v:'#fef3c7',t:'노랑'},{v:'#dbeafe',t:'하늘'},{v:'#fecaca',t:'분홍'},{v:'#000',t:'검정'},{v:'#fff',t:'흰색'}]
 };
 </script>
 <script src="assets/app.js"></script>
