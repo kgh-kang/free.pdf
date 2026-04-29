@@ -248,10 +248,12 @@ async function handleEditFiles(files){
                 const thumbDpr=Math.max(2,window.devicePixelRatio||1);
                 const vp=page.getViewport({scale:THUMB_SCALE*thumbDpr});
                 const baseVp=page.getViewport({scale:1});
+                // PDF에 저장된 회전 메타데이터 (페이지가 가로로 저장된 후 90° 회전 등)
+                const naturalRotation=baseVp.rotation||0;
                 const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
                 await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
                 if(editCancelled.has(fname))break;
-                editPages.push({arrayBuffer:ab,sourceFile:fname,sourcePageIndex:i,selected:true,thumbCanvas:canvas,rotation:0,textBoxes:[],imageBoxes:[],pageW:baseVp.width,pageH:baseVp.height,thumbDpr});
+                editPages.push({arrayBuffer:ab,sourceFile:fname,sourcePageIndex:i,selected:true,thumbCanvas:canvas,rotation:0,naturalRotation,textBoxes:[],imageBoxes:[],pageW:baseVp.width,pageH:baseVp.height,thumbDpr});
             }
             editCancelled.delete(fname);
         }catch(e){showError(errEl,T.errFileRead(f.name))}
@@ -513,7 +515,8 @@ async function openPageEditor(pg){
     if(opts.markImgOn){opts.markImgEl=await getMarkImgElement().catch(()=>null)}
     const pdf=await pdfjsLib.getDocument({data:pg.arrayBuffer.slice(0)}).promise;
     const page=await pdf.getPage(pg.sourcePageIndex+1);
-    const rot=pg.rotation%360;
+    // PDF 자체 회전(메타데이터) + 사용자 회전 모두 합쳐 적용
+    const rot=((pg.naturalRotation||0)+pg.rotation)%360;
     // 화면 표시는 MODAL_SCALE, 실제 캔버스 픽셀은 dpr*2 boost로 선명도 확보
     const dpr=window.devicePixelRatio||1;
     const sharpness=Math.max(2,dpr);
@@ -1062,7 +1065,7 @@ function renderEditGrid(){
         div.setAttribute('tabindex','0');
         div.setAttribute('aria-checked',pg.selected?'true':'false');
         div.setAttribute('aria-label',`${i+1}페이지`);
-        div.innerHTML=`<div class="page-thumb-check" style="background:${color}">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" title="${T.rotateTitle}" aria-label="${T.rotateTitle}">↻</button><button class="page-thumb-btn" data-act="preview" title="${T.previewTitle}" aria-label="${T.previewTitle}">⤢</button></div><div class="page-thumb-color" style="background:${color}"></div>`;
+        div.innerHTML=`<div class="page-thumb-check" style="background:${color}">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" title="${T.rotateTitle}" aria-label="${T.rotateTitle}">↻</button><button class="page-thumb-btn" data-act="preview" title="${T.previewTitle}" aria-label="${T.previewTitle}">⤢</button><button class="page-thumb-btn page-thumb-btn-del" data-act="delete" title="${T.deletePageTitle}" aria-label="${T.deletePageTitle}">✕</button></div><div class="page-thumb-color" style="background:${color}"></div>`;
         const c=renderThumbCanvas(pg);
         div.insertBefore(c,div.firstChild);
         const num=document.createElement('div');num.className='page-thumb-num';num.textContent=(i+1)+'p';div.appendChild(num);
@@ -1104,6 +1107,20 @@ function renderEditGrid(){
         div.querySelector('[data-act="preview"]').addEventListener('click',e=>{
             e.stopPropagation();
             openPageEditor(pg);
+        });
+        div.querySelector('[data-act="delete"]').addEventListener('click',e=>{
+            e.stopPropagation();
+            pushHistory();
+            const idx=editPages.indexOf(pg);
+            if(idx>=0)editPages.splice(idx,1);
+            // 더 이상 그 sourceFile에 속한 페이지가 없으면 sourceNames/Files에서 제거
+            const stillHas=editPages.some(p=>p.sourceFile===pg.sourceFile);
+            if(!stillHas){
+                const sIdx=editSourceNames.indexOf(pg.sourceFile);
+                if(sIdx>=0){editSourceNames.splice(sIdx,1);editSourceFiles.splice(sIdx,1)}
+            }
+            if(!editPages.length){document.getElementById('editClearBtn').click();return}
+            renderEditGrid();
         });
         function togglePageSel(){pushHistory();pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';div.setAttribute('aria-checked',pg.selected?'true':'false');updateEditStatus();scheduleThumbRedraw()}
         div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate')||e.target.closest('.page-thumb-btn'))return;togglePageSel()});
