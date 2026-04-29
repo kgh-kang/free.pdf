@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>free.pdf — PDF 편집 · 변환 · 워터마크</title>
     <link rel="alternate" hreflang="ko" href="./">
-    <link rel="alternate" hreflang="en" href="./en/">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; form-action 'none';">
+    <link rel="alternate" hreflang="en" href="./en/index.html">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; base-uri 'self'; object-src 'none'; form-action 'none';">
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" integrity="sha384-2p6U+1mmqF10USehFeRiyG2ESG9FwIqN+jxULn5w9jjQIihSn9Pt13dVCn/Hawjn" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
@@ -22,7 +22,7 @@
                 <span class="breadcrumb" id="breadcrumb" style="display:none">›</span>
                 <span class="breadcrumb-name" id="breadcrumbName" style="display:none"></span>
             </div>
-            <a class="lang-btn" href="./en/">English</a>
+            <a class="lang-btn" href="./en/index.html">English</a>
         </div>
         <header>
             <h1 data-action="home">간단한 PDF 작업을<br>브라우저에서 안전하게</h1>
@@ -35,7 +35,7 @@
     <div class="welcome-icon" aria-hidden="true">👋</div>
     <div class="welcome-body">
         <strong class="welcome-title">free.pdf 에 오신 걸 환영합니다</strong>
-        <p class="welcome-text">PDF 편집·변환·텍스트 추출이 모두 <b>브라우저 안에서만</b> 처리됩니다. 파일이 외부 서버로 전송되지 않습니다. 아래 카드 중 원하는 도구를 선택하세요.</p>
+        <p class="welcome-text">PDF 편집·변환·텍스트 추출이 모두 <b>브라우저 안에서만</b> 처리됩니다. 파일이 외부 서버로 전송되지 않습니다.<br>처음이라면 <b>합치기·페이지 추출·삭제·회전</b>은 <b>[PDF 편집]</b>, 이미지↔PDF 변환은 <b>[이미지 변환]</b>, 본문 복사는 <b>[텍스트 추출]</b> 카드를 누르세요.</p>
     </div>
     <button type="button" class="welcome-close" data-action="welcome-close" aria-label="환영 메시지 닫기">✕</button>
 </div>
@@ -49,10 +49,10 @@
 <div class="view" id="view-edit">
     <button class="back-btn" data-action="home">← 돌아가기</button>
     <div class="tool-title">PDF 편집</div>
-    <div class="tool-desc">페이지를 선택하고, 순서를 바꾸고, 회전해서 저장하세요<br><span class="tool-hint">각 페이지 우측 상단의 ⤢ 버튼으로 크게 보면 텍스트·이미지 추가가 가능합니다</span></div>
+    <div class="tool-desc">페이지를 선택해 <b>합치기·추출</b>하거나, 순서·회전을 바꿔 저장하세요<br><span class="tool-hint">각 페이지 우측 상단의 ⤢ 버튼으로 크게 보면 텍스트·이미지 추가가 가능합니다</span></div>
     <div class="drop-zone" id="editDropZone"><div class="drop-zone-icon">EDIT</div><div class="drop-zone-text">PDF 파일을 드래그하거나 클릭</div><div class="drop-zone-sub">여러 파일 선택 가능 · 추가로 더 넣을 수 있습니다</div></div>
     <input type="file" id="editFileInput" accept=".pdf" multiple>
-    <div class="error-msg" id="editError"></div>
+    <div class="error-msg" id="editError" role="alert" aria-live="assertive"></div>
     <div id="editWorkspace" style="display:none">
         <div class="edit-layout">
             <div class="edit-sidebar">
@@ -104,10 +104,11 @@
                         </div>
                     </div>
                 </div>
-                <div class="page-grid" id="editPageGrid"></div>
+                <div class="edit-grid-toolbar"><input class="form-input edit-range-input" id="editRangeInput" placeholder="범위 입력 (예: 1-3, 5)" aria-label="페이지 범위 선택"><button class="btn btn-sm btn-secondary" id="editRangeApply" type="button">적용</button></div>
+                <div class="page-grid" id="editPageGrid" role="group" aria-label="페이지 목록"></div>
                 <input type="file" id="editInlineAddInput" accept=".pdf" multiple>
                 <div class="progress-bar" id="editProgress"><div class="progress-bar-fill" id="editProgressFill"></div></div>
-                <div class="status" id="editStatus"></div>
+                <div class="status" id="editStatus" aria-live="polite"></div>
                 <div class="actions"><button class="btn btn-secondary" id="editClearBtn">초기화</button><button class="btn btn-primary" id="editSaveBtn" disabled>저장</button></div>
             </div>
         </div>
@@ -121,9 +122,9 @@
     <div class="tool-desc">PDF에서 텍스트를 추출합니다</div>
     <div class="drop-zone" id="textDropZone"><div class="drop-zone-icon">TEXT</div><div class="drop-zone-text">PDF 파일을 넣어주세요</div><div class="drop-zone-sub">파일 1개 선택</div></div>
     <input type="file" id="textFileInput" accept=".pdf">
-    <div class="error-msg" id="textError"></div>
+    <div class="error-msg" id="textError" role="alert" aria-live="assertive"></div>
     <div class="progress-bar" id="textProgress"><div class="progress-bar-fill" id="textProgressFill"></div></div>
-    <div class="status" id="textStatus"></div>
+    <div class="status" id="textStatus" aria-live="polite"></div>
     <div class="text-result" id="textResult">
         <textarea id="extractedText" readonly></textarea>
         <div class="text-actions"><button class="btn btn-secondary" data-action="reset-tool" data-tool="text">초기화</button><button class="btn btn-primary" id="copyBtn">복사하기</button><button class="btn btn-primary" id="downloadTxtBtn">TXT 다운로드</button></div>
@@ -151,10 +152,10 @@
         <div class="tool-desc">이미지 파일을 PDF로 변환합니다</div>
         <div class="drop-zone" id="img2pdfDropZone"><div class="drop-zone-icon">IMG</div><div class="drop-zone-text">이미지 파일을 드래그하거나 클릭</div><div class="drop-zone-sub">JPG, PNG 지원 · 여러 파일 선택 가능</div></div>
         <input type="file" id="img2pdfFileInput" accept="image/jpeg,image/png" multiple>
-        <div class="error-msg" id="img2pdfError"></div>
+        <div class="error-msg" id="img2pdfError" role="alert" aria-live="assertive"></div>
         <div class="form-group" id="img2pdfSizeGroup" style="display:none"><label class="form-label">페이지 크기</label><select class="form-select" id="img2pdfPageSize"><option value="original">원본 크기</option><option value="a4fit">A4 맞춤</option></select></div>
         <div class="img-preview-list" id="img2pdfPreview"></div>
-        <div class="status" id="img2pdfStatus"></div>
+        <div class="status" id="img2pdfStatus" aria-live="polite"></div>
         <div class="actions" id="img2pdfActions" style="display:none"><button class="btn btn-secondary" data-action="reset-convert">초기화</button><button class="btn btn-primary" id="img2pdfBtn">PDF로 저장</button></div>
     </div>
     <!-- PDF→이미지 모드 -->
@@ -162,7 +163,7 @@
         <div class="tool-desc">PDF 페이지를 이미지로 저장합니다</div>
         <div class="drop-zone" id="pdf2imgDropZone"><div class="drop-zone-icon">PDF</div><div class="drop-zone-text">PDF 파일을 넣어주세요</div><div class="drop-zone-sub">파일 1개 선택</div></div>
         <input type="file" id="pdf2imgFileInput" accept=".pdf">
-        <div class="error-msg" id="pdf2imgError"></div>
+        <div class="error-msg" id="pdf2imgError" role="alert" aria-live="assertive"></div>
         <div id="pdf2imgOptions" style="display:none">
             <div class="form-row">
                 <div class="form-group"><label class="form-label">이미지 형식</label><select class="form-select" id="pdf2imgFormat"><option value="png">PNG</option><option value="jpeg">JPG</option></select></div>
@@ -170,7 +171,7 @@
             </div>
             <div id="pdf2imgPageContainer"></div>
             <div class="progress-bar" id="pdf2imgProgress"><div class="progress-bar-fill" id="pdf2imgProgressFill"></div></div>
-            <div class="status" id="pdf2imgStatus"></div>
+            <div class="status" id="pdf2imgStatus" aria-live="polite"></div>
             <div class="actions"><button class="btn btn-secondary" data-action="reset-convert">초기화</button><button class="btn btn-primary" id="pdf2imgBtn">이미지로 저장</button></div>
         </div>
     </div>

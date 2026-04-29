@@ -1,3 +1,5 @@
+// 클릭재킹 가드 — meta CSP는 frame-ancestors 미지원이라 JS로 대체 (호스팅 헤더 추가 시 제거 가능)
+if(window.top!==window.self){try{window.top.location=window.self.location}catch(_){window.location='about:blank'}}
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 const APP_BASE=new URL('.',document.currentScript.src).href;
@@ -189,7 +191,7 @@ function setupDropZone(dzId,fiId,cb,opts={}){
     const accept=opts.accept||'application/pdf';const multi=fi.hasAttribute('multiple');
     dz.setAttribute('role','button');
     dz.setAttribute('tabindex','0');
-    if(!dz.hasAttribute('aria-label'))dz.setAttribute('aria-label',(opts.accept==='image/*'?'이미지':'PDF')+' 파일 선택');
+    if(!dz.hasAttribute('aria-label'))dz.setAttribute('aria-label',opts.accept==='image/*'?T.dropzoneAriaImage:T.dropzoneAriaPdf);
     dz.addEventListener('click',()=>fi.click());
     dz.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click()}});
     dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over')});
@@ -225,19 +227,70 @@ function getPdfDoc(data,password){
     if(password!=null)opts.password=password;
     return pdfjsLib.getDocument(opts).promise;
 }
-// 암호 보호 PDF 자동 감지 + 사용자 prompt (3회 시도)
+// 인앱 암호 모달 — Promise 반환 (입력 문자열 또는 null=skip)
+function showPasswordModal(fileName,attempt,max,hasError){
+    return new Promise(resolve=>{
+        const overlay=document.createElement('div');overlay.className='pw-modal-overlay';
+        const modal=document.createElement('div');modal.className='pw-modal';
+        modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
+        const titleId='pwModalTitle_'+Date.now();
+        const title=document.createElement('h2');title.id=titleId;title.textContent=T.pwModalTitle(fileName||'PDF');
+        modal.setAttribute('aria-labelledby',titleId);
+        modal.appendChild(title);
+        const desc=document.createElement('p');desc.textContent=T.pwModalDesc;modal.appendChild(desc);
+        if(hasError){
+            const err=document.createElement('div');err.className='pw-modal-error';
+            err.setAttribute('role','alert');err.textContent=T.pwModalWrong;
+            modal.appendChild(err);
+        }
+        const input=document.createElement('input');input.type='password';input.className='pw-modal-input';
+        input.placeholder=T.pwInputPlaceholder;input.autocomplete='off';
+        input.setAttribute('aria-label',T.pwInputPlaceholder);
+        modal.appendChild(input);
+        const att=document.createElement('div');att.className='pw-modal-attempt';att.textContent=T.pwModalAttempt(attempt,max);
+        modal.appendChild(att);
+        const actions=document.createElement('div');actions.className='pw-modal-actions';
+        const skipBtn=document.createElement('button');skipBtn.type='button';skipBtn.className='btn btn-secondary';skipBtn.textContent=T.pwModalSkip;
+        const submitBtn=document.createElement('button');submitBtn.type='button';submitBtn.className='btn btn-primary';submitBtn.textContent=T.pwModalSubmit;
+        actions.appendChild(skipBtn);actions.appendChild(submitBtn);
+        modal.appendChild(actions);
+        overlay.appendChild(modal);document.body.appendChild(overlay);
+        const lastFocus=document.activeElement;
+        function done(result){
+            try{input.value=''}catch(_){}
+            overlay.remove();
+            try{if(lastFocus&&lastFocus.focus&&document.contains(lastFocus))lastFocus.focus()}catch(_){}
+            resolve(result);
+        }
+        submitBtn.addEventListener('click',()=>done(input.value||null));
+        skipBtn.addEventListener('click',()=>done(null));
+        input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitBtn.click()}else if(e.key==='Escape'){e.preventDefault();skipBtn.click()}});
+        overlay.addEventListener('click',e=>{if(e.target===overlay)done(null)});
+        // 모달 내 Tab focus trap
+        overlay.addEventListener('keydown',e=>{
+            if(e.key!=='Tab')return;
+            const f=[input,skipBtn,submitBtn];
+            const first=f[0],last=f[f.length-1];
+            if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+            else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+        });
+        setTimeout(()=>input.focus(),0);
+    });
+}
+// 암호 보호 PDF 자동 감지 + 인앱 모달 (3회 시도, 평문 password 클리어)
 async function unlockPdf(arrayBuffer,fileName){
     try{return{doc:await getPdfDoc(arrayBuffer.slice(0)),password:null}}
-    catch(e){
-        if(!/password/i.test(String(e&&e.message||e||'')))throw e;
-    }
+    catch(e){if(!/password/i.test(String(e&&e.message||e||'')))throw e}
+    let hasError=false;
     for(let i=0;i<3;i++){
-        const label=(fileName?`${fileName}\n\n`:'')+T.passwordPrompt;
-        const pwd=window.prompt(label);
+        const pwd=await showPasswordModal(fileName,i+1,3,hasError);
         if(pwd===null){const err=new Error(T.passwordSkipped);err.skipped=true;throw err}
-        try{return{doc:await getPdfDoc(arrayBuffer.slice(0),pwd),password:pwd}}
-        catch(e2){
+        try{
+            const doc=await getPdfDoc(arrayBuffer.slice(0),pwd);
+            return{doc,password:pwd};
+        }catch(e2){
             if(!/password/i.test(String(e2&&e2.message||e2||'')))throw e2;
+            hasError=true;
             if(i===2){const err=new Error(T.passwordWrong);err.passwordFail=true;throw err}
         }
     }
@@ -263,16 +316,21 @@ async function renderPageGrid(arrayBuffer,containerId,opts={}){
         const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
         await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
         const div=document.createElement('div');div.className='page-thumb';div.dataset.idx=i-1;
+        div.setAttribute('role','checkbox');
+        div.setAttribute('tabindex','0');
+        div.setAttribute('aria-checked','false');
+        div.setAttribute('aria-label',T.pageThumbLabel(i));
         div.innerHTML=`<div class="page-thumb-check">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" type="button" title="${T.rotateTitle}" aria-label="${T.rotateTitle}">↻</button></div>`;
         div.insertBefore(canvas,div.firstChild);
         const num=document.createElement('div');num.className='page-thumb-num';num.textContent=i+'p';div.appendChild(num);
         const idx=i-1;
-        div.addEventListener('click',e=>{
-            if(e.target.closest('.page-thumb-btn'))return;
-            if(selected.has(idx)){selected.delete(idx);div.classList.remove('selected')}
-            else{selected.add(idx);div.classList.add('selected')}
+        function toggle(){
+            if(selected.has(idx)){selected.delete(idx);div.classList.remove('selected');div.setAttribute('aria-checked','false')}
+            else{selected.add(idx);div.classList.add('selected');div.setAttribute('aria-checked','true')}
             updateCount();
-        });
+        }
+        div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-btn'))return;toggle()});
+        div.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&e.target===div){e.preventDefault();toggle()}});
         const naturalRot=page.getViewport({scale:1}).rotation||0;
         div.querySelector('[data-act="rotate"]').addEventListener('click',async e=>{
             e.stopPropagation();
@@ -286,10 +344,10 @@ async function renderPageGrid(arrayBuffer,containerId,opts={}){
         grid.appendChild(div);thumbs.push(div);
     }
     function updateCount(){const c=selected.size;if(opts.onCount)opts.onCount(c,total)}
-    function setAll(on){thumbs.forEach((t,i)=>{if(on){selected.add(i);t.classList.add('selected')}else{selected.delete(i);t.classList.remove('selected')}});updateCount()}
+    function setAll(on){thumbs.forEach((t,i)=>{if(on){selected.add(i);t.classList.add('selected');t.setAttribute('aria-checked','true')}else{selected.delete(i);t.classList.remove('selected');t.setAttribute('aria-checked','false')}});updateCount()}
     ctrl.querySelector('[data-act="all"]').onclick=()=>setAll(true);
     ctrl.querySelector('[data-act="none"]').onclick=()=>setAll(false);
-    ctrl.querySelector('[data-act="apply"]').onclick=()=>{const v=ctrl.querySelector('[data-act="range"]').value;if(!v.trim())return;setAll(false);parseRange(v,total).forEach(i=>{selected.add(i);thumbs[i].classList.add('selected')});updateCount()};
+    ctrl.querySelector('[data-act="apply"]').onclick=()=>{const v=ctrl.querySelector('[data-act="range"]').value;if(!v.trim())return;setAll(false);parseRange(v,total).forEach(i=>{selected.add(i);thumbs[i].classList.add('selected');thumbs[i].setAttribute('aria-checked','true')});updateCount()};
     const getSel=()=>Array.from(selected).sort((a,b)=>a-b);
     getSel.getRotations=()=>rotations;
     return getSel;
@@ -298,6 +356,8 @@ async function renderPageGrid(arrayBuffer,containerId,opts={}){
 // ===== 1. PDF 편집 (합치기+나누기+삭제+추출+회전 통합) =====
 const fileColors=['#fb7185','#fb923c','#fbbf24','#a3e635','#34d399','#2dd4bf','#22d3ee','#a78bfa','#e879f9','#f472b6'];
 let editPages=[],editDragIdx=null,editSourceNames=[],editSourceFiles=[],editCancelled=new Set();
+// 모달 클릭 안내 — EDIT 세션마다 첫 모달 진입 시 1회 노출 (OK 누르면 dismiss)
+let _editClickHintShown=false;
 
 // ===== Undo/Redo 히스토리 =====
 const _history={past:[],future:[],MAX:50,suspended:0};
@@ -353,6 +413,29 @@ function redo(){
     restoreState(_history.future.pop());
 }
 function clearHistory(){_history.past=[];_history.future=[]}
+// 화면 하단 토스트 (Undo 버튼 포함). msg 출력 + label 클릭 시 undo() 콜.
+let _activeToast=null;
+function showPageToast(msg,opts={}){
+    if(_activeToast){clearTimeout(_activeToast._timer);_activeToast.remove();_activeToast=null}
+    const t=document.createElement('div');t.className='page-toast';
+    t.setAttribute('role','status');t.setAttribute('aria-live','polite');
+    const span=document.createElement('span');span.textContent=msg;t.appendChild(span);
+    if(opts.undoable!==false){
+        const btn=document.createElement('button');btn.type='button';btn.className='page-toast-undo';
+        btn.textContent=T.toastUndo;
+        btn.addEventListener('click',()=>{undo();_dismissToast()});
+        t.appendChild(btn);
+    }
+    document.body.appendChild(t);
+    function _dismissToast(){
+        if(!t.parentNode)return;
+        t.classList.add('out');
+        setTimeout(()=>t.remove(),250);
+        if(_activeToast===t)_activeToast=null;
+    }
+    _activeToast=t;
+    t._timer=setTimeout(_dismissToast,opts.duration||5000);
+}
 function closeAnyOpenEditor(){
     document.querySelectorAll('.page-preview-overlay').forEach(o=>o.remove());
 }
@@ -360,12 +443,31 @@ document.addEventListener('keydown',e=>{
     const editView=document.getElementById('view-edit');
     if(!editView||!editView.classList.contains('active'))return;
     if(e.target&&(e.target.isContentEditable||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
+    if(document.querySelector('.page-preview-overlay'))return;
     const cmd=e.metaKey||e.ctrlKey;
     if(!cmd)return;
     const k=e.key.toLowerCase();
     if(k==='z'){e.preventDefault();if(e.shiftKey)redo();else undo()}
     else if(k==='y'){e.preventDefault();redo()}
 });
+
+// EDIT 그리드 범위 입력 핸들러
+(function(){
+    const ri=document.getElementById('editRangeInput');
+    const ra=document.getElementById('editRangeApply');
+    function applyRange(){
+        const v=(ri&&ri.value||'').trim();
+        if(!v||!editPages.length)return;
+        const idxs=parseRange(v,editPages.length);
+        if(!idxs.length)return;
+        pushHistory();
+        const set=new Set(idxs);
+        editPages.forEach((p,i)=>p.selected=set.has(i));
+        renderEditGrid();
+    }
+    if(ra)ra.addEventListener('click',applyRange);
+    if(ri)ri.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();applyRange()}});
+})();
 setupDropZone('editDropZone','editFileInput',handleEditFiles);
 setupDropZone('editAddDropZone','editAddFileInput',handleEditFiles);
 
@@ -373,6 +475,7 @@ async function handleEditFiles(files){
     const errEl=document.getElementById('editError');
     checkLargeFiles(files,document.getElementById('view-edit'));
     const willAdd=files.some(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
+    if(willAdd&&!editPages.length)_editClickHintShown=false; // 새 EDIT 세션 시작 — 안내 다시 표시
     if(willAdd&&editPages.length)pushHistory();
     for(const f of files.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'))){
         let pdf=null;let pgPassword=null;
@@ -441,6 +544,7 @@ function renderEditFileList(){
             editSourceNames.splice(i,1);editSourceFiles.splice(i,1);
             if(!editPages.length){document.getElementById('editClearBtn').click();return}
             renderEditGrid();
+            showPageToast(T.toastFileDeleted(fname));
         });
         list.appendChild(div);
     });
@@ -695,7 +799,11 @@ async function openPageEditor(pg){
 
     // ===== 2. 모달 컨테이너 + 닫기 버튼 + 툴바 =====
     const overlay=document.createElement('div');overlay.className='page-preview-overlay';
-    const closeBtn=document.createElement('span');closeBtn.className='page-preview-close';closeBtn.innerHTML='&times;';
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.setAttribute('aria-label',T.modalDialogLabel(pg.sourcePageIndex+1));
+    const closeBtn=document.createElement('button');closeBtn.type='button';closeBtn.className='page-preview-close';closeBtn.innerHTML='&times;';
+    closeBtn.setAttribute('aria-label',T.modalCloseLabel);
     overlay.appendChild(closeBtn);
     const toolbar=buildModalTextToolbar();
     overlay.appendChild(toolbar);
@@ -778,6 +886,12 @@ async function openPageEditor(pg){
             _multiSel.delete(box);
             el.classList.remove('multi-selected');
         }else{
+            // 첫 번째 Shift+클릭 시 기존 _focusedBox 도 함께 multi 에 포함 — 정렬 버튼 노출 조건(>=2) 충족
+            if(_multiSel.size===0&&_focusedBox&&_focusedBox!==box){
+                _multiSel.add(_focusedBox);
+                const focusEl=textLayer.querySelector(`.page-text-box[data-id="${_focusedBox.id}"]`);
+                if(focusEl)focusEl.classList.add('multi-selected');
+            }
             _multiSel.add(box);
             el.classList.add('multi-selected');
             syncToolbarFromOpts(box);
@@ -831,11 +945,20 @@ async function openPageEditor(pg){
     const textLayer=document.createElement('div');textLayer.className='page-editor-textlayer';
     content.appendChild(textLayer);
     wrap.appendChild(content);
-    overlay.appendChild(wrap);
+    // PDF 캔버스 행 — 좌/우 네비를 캔버스 양 옆에 배치(데스크톱). 모바일은 fixed 로 viewport 양 끝
+    const canvasRow=document.createElement('div');canvasRow.className='modal-canvas-row';
+    canvasRow.appendChild(wrap);
+    overlay.appendChild(canvasRow);
     const note=document.createElement('div');note.className='modal-preview-note';note.textContent=T.modalPreviewNote;
     overlay.appendChild(note);
-    const clickHint=document.createElement('div');clickHint.className='modal-click-hint';clickHint.textContent=T.modalClickHint;
-    overlay.appendChild(clickHint);
+    if(!_editClickHintShown){
+        const clickHint=document.createElement('div');clickHint.className='modal-click-hint';
+        const text=document.createElement('span');text.textContent=T.modalClickHint;
+        const okBtn=document.createElement('button');okBtn.type='button';okBtn.className='modal-click-hint-ok';okBtn.textContent=T.clickHintOk;
+        okBtn.addEventListener('click',()=>{_editClickHintShown=true;clickHint.remove()});
+        clickHint.appendChild(text);clickHint.appendChild(okBtn);
+        overlay.appendChild(clickHint);
+    }
 
     // 모달 진입 = 텍스트 추가 모드 항상 ON. 캔버스 클릭 = 박스 즉시 추가, text 커서.
     _textOpts.addMode=true;
@@ -1125,8 +1248,24 @@ async function openPageEditor(pg){
     }
     pg.textBoxes.forEach(b=>textLayer.appendChild(makeBoxEl(b)));
 
-    // ===== 7. 캔버스 클릭 → 텍스트 박스 즉시 추가 =====
+    // ===== 7. 캔버스 클릭 → 기존 박스 근처면 그 박스 편집, 아니면 새 박스 추가 =====
     bigCanvas.addEventListener('click',e=>{
+        const HIT_PAD=8;
+        const existing=textLayer.querySelectorAll('.page-text-box');
+        for(let i=existing.length-1;i>=0;i--){
+            const r=existing[i].getBoundingClientRect();
+            if(e.clientX>=r.left-HIT_PAD&&e.clientX<=r.right+HIT_PAD&&e.clientY>=r.top-HIT_PAD&&e.clientY<=r.bottom+HIT_PAD){
+                const content=existing[i].querySelector('.page-text-box-content');
+                if(content){
+                    content.focus();
+                    const sel=window.getSelection();sel.removeAllRanges();
+                    const r2=document.caretRangeFromPoint?document.caretRangeFromPoint(e.clientX,e.clientY):null;
+                    if(r2&&content.contains(r2.startContainer)){sel.addRange(r2);}
+                    else{const range=document.createRange();range.selectNodeContents(content);range.collapse(false);sel.addRange(range);}
+                }
+                return;
+            }
+        }
         const rect=bigCanvas.getBoundingClientRect();
         const cx=(e.clientX-rect.left)/MODAL_SCALE;
         const cy=(e.clientY-rect.top)/MODAL_SCALE;
@@ -1192,18 +1331,22 @@ async function openPageEditor(pg){
         oldOverlay.remove();
         scheduleThumbRedraw();
     }
-    const prevBtn=document.createElement('span');prevBtn.className='page-preview-nav page-preview-prev';prevBtn.innerHTML='‹';
-    if(curIdx<=0)prevBtn.classList.add('disabled');
+    const prevBtn=document.createElement('button');prevBtn.type='button';prevBtn.className='page-preview-nav page-preview-prev';prevBtn.innerHTML='‹';
+    prevBtn.setAttribute('aria-label',T.modalNavPrevLabel);
+    if(curIdx<=0){prevBtn.classList.add('disabled');prevBtn.disabled=true}
     prevBtn.addEventListener('click',e=>{e.stopPropagation();if(!prevBtn.classList.contains('disabled'))navigate(-1)});
-    overlay.appendChild(prevBtn);
-    const nextBtn=document.createElement('span');nextBtn.className='page-preview-nav page-preview-next';nextBtn.innerHTML='›';
-    if(curIdx>=editPages.length-1)nextBtn.classList.add('disabled');
+    canvasRow.insertBefore(prevBtn,wrap);
+    const nextBtn=document.createElement('button');nextBtn.type='button';nextBtn.className='page-preview-nav page-preview-next';nextBtn.innerHTML='›';
+    nextBtn.setAttribute('aria-label',T.modalNavNextLabel);
+    if(curIdx>=editPages.length-1){nextBtn.classList.add('disabled');nextBtn.disabled=true}
     nextBtn.addEventListener('click',e=>{e.stopPropagation();if(!nextBtn.classList.contains('disabled'))navigate(1)});
-    overlay.appendChild(nextBtn);
+    canvasRow.appendChild(nextBtn);
     function onKey(e){
         const inEditable=e.target.closest('.page-text-box')||e.target.matches('input,select,textarea');
         if(e.key==='Escape'&&!e.target.closest('.page-text-box')){close();return}
         if(inEditable)return;
+        // 박스 다중 선택 시엔 화살표는 nudge로 — 페이지 네비 안 함
+        if(_multiSel.size)return;
         if(e.key==='ArrowLeft')navigate(-1);
         else if(e.key==='ArrowRight')navigate(1);
     }
@@ -1218,10 +1361,25 @@ async function openPageEditor(pg){
         if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
         else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
     });
+    // 박스 다중 선택 시 화살표 nudge (1px / Shift+10px) — pushHistory 는 debounce
+    let _nudgeTimer=null;let _nudgeStarted=false;
+    overlay.addEventListener('keydown',e=>{
+        if(!_multiSel.size)return;
+        if(!e.key.startsWith('Arrow'))return;
+        const tgt=e.target;
+        if(tgt&&(tgt.tagName==='INPUT'||tgt.tagName==='SELECT'||tgt.tagName==='TEXTAREA'||tgt.isContentEditable))return;
+        e.preventDefault();
+        if(!_nudgeStarted){pushHistory();_nudgeStarted=true}
+        const step=e.shiftKey?10:1;
+        const dx=e.key==='ArrowLeft'?-step:e.key==='ArrowRight'?step:0;
+        const dy=e.key==='ArrowUp'?-step:e.key==='ArrowDown'?step:0;
+        _multiSel.forEach(b=>{b.x=Math.max(0,b.x+dx);b.y=Math.max(0,b.y+dy);refreshBoxDom(b)});
+        clearTimeout(_nudgeTimer);
+        _nudgeTimer=setTimeout(()=>{_nudgeStarted=false;scheduleThumbRedraw()},400);
+    });
     document.addEventListener('keydown',onKey);
     document.body.appendChild(overlay);
     // 모달 진입 즉시 첫 인터랙티브 요소(닫기 버튼)에 focus
-    closeBtn.tabIndex=0;
     setTimeout(()=>closeBtn.focus(),0);
 }
 
@@ -1248,6 +1406,7 @@ function scheduleThumbRedraw(){
 
 function renderEditGrid(){
     const grid=document.getElementById('editPageGrid');grid.innerHTML='';
+    grid.setAttribute('aria-label',T.pageGridLabel(editPages.length));
     const sidebar=document.querySelector('.edit-sidebar');
     if(sidebar)sidebar.style.display=editSourceNames.length>1?'':'none';
     if(editSourceNames.length>1)renderEditFileList();
@@ -1258,7 +1417,7 @@ function renderEditGrid(){
         div.setAttribute('role','checkbox');
         div.setAttribute('tabindex','0');
         div.setAttribute('aria-checked',pg.selected?'true':'false');
-        div.setAttribute('aria-label',`${i+1}페이지`);
+        div.setAttribute('aria-label',T.pageThumbLabel(i+1));
         div.innerHTML=`<div class="page-thumb-check" style="background:${color}">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" title="${T.rotateTitle}" aria-label="${T.rotateTitle}">↻</button><button class="page-thumb-btn" data-act="preview" title="${T.previewTitle}" aria-label="${T.previewTitle}">⤢</button><button class="page-thumb-btn page-thumb-btn-del" data-act="delete" title="${T.deletePageTitle}" aria-label="${T.deletePageTitle}">✕</button></div><div class="page-thumb-color" style="background:${color}"></div>`;
         const c=renderThumbCanvas(pg);
         div.insertBefore(c,div.firstChild);
@@ -1307,7 +1466,6 @@ function renderEditGrid(){
             pushHistory();
             const idx=editPages.indexOf(pg);
             if(idx>=0)editPages.splice(idx,1);
-            // 더 이상 그 sourceFile에 속한 페이지가 없으면 sourceNames/Files에서 제거
             const stillHas=editPages.some(p=>p.sourceFile===pg.sourceFile);
             if(!stillHas){
                 const sIdx=editSourceNames.indexOf(pg.sourceFile);
@@ -1315,6 +1473,7 @@ function renderEditGrid(){
             }
             if(!editPages.length){document.getElementById('editClearBtn').click();return}
             renderEditGrid();
+            showPageToast(T.toastPagesDeleted(1));
         });
         function togglePageSel(){pushHistory();pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';div.setAttribute('aria-checked',pg.selected?'true':'false');updateEditStatus();scheduleThumbRedraw()}
         div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate')||e.target.closest('.page-thumb-btn'))return;togglePageSel()});
@@ -1359,10 +1518,6 @@ function updateEditStatus(){
 
 document.getElementById('editTbRotateAll').addEventListener('click',()=>{
     if(!editPages.length)return;
-    const hasBoxes=editPages.some(p=>(p.textBoxes&&p.textBoxes.length)||(p.imageBoxes&&p.imageBoxes.length));
-    if(hasBoxes){
-        if(!confirm(T.rotateAllConfirm))return;
-    }
     pushHistory();
     editPages.forEach(pg=>{
         // 텍스트/이미지 박스 변환식은 기존 회전 핸들러와 동일
@@ -1388,6 +1543,7 @@ document.getElementById('editTbRotateAll').addEventListener('click',()=>{
         pg.rotation=(pg.rotation+90)%360;
     });
     renderEditGrid();
+    showPageToast(T.toastRotatedAll);
 });
 
 document.getElementById('editSelectToggle').addEventListener('click',()=>{
@@ -1438,13 +1594,44 @@ function setEditMarkMode(m){
 }
 document.getElementById('editMarkModeText').addEventListener('click',()=>setEditMarkMode('text'));
 document.getElementById('editMarkModeImage').addEventListener('click',()=>setEditMarkMode('image'));
+// 도장 이미지 localStorage 저장 키 (1MB 이하만 저장)
+const STAMP_IMG_KEY='freepdf.opt.editMarkImg';
+const STAMP_IMG_MAX=1024*1024;
+function _arrayBufferToB64(ab){
+    const bytes=new Uint8Array(ab);let bin='';
+    for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);
+    return btoa(bin);
+}
+function _b64ToArrayBuffer(b64){
+    const bin=atob(b64);const arr=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+    return arr.buffer;
+}
+function _saveStampImg(name,type,ab){
+    if(ab.byteLength>STAMP_IMG_MAX){try{localStorage.removeItem(STAMP_IMG_KEY)}catch(_){}return}
+    try{localStorage.setItem(STAMP_IMG_KEY,JSON.stringify({name,type,b64:_arrayBufferToB64(ab)}))}catch(_){}
+}
 setupDropZone('editMarkImgZone','editMarkImgInput',async files=>{
     const f=files[0];if(!f||!f.type.startsWith('image/'))return;
-    editMarkImgData={arrayBuffer:await f.arrayBuffer(),type:f.type};
+    const ab=await f.arrayBuffer();
+    editMarkImgData={arrayBuffer:ab,type:f.type};
     _markImgEl=null;
     document.getElementById('editMarkImgZone').innerHTML=T.editMarkImgSelectedHtml(escapeHtml(f.name));
+    _saveStampImg(f.name,f.type,ab);
     scheduleThumbRedraw();
 },{accept:'image/*'});
+// 페이지 로드 시 마지막 도장 이미지 복원
+(function restoreStampImg(){
+    let raw=null;try{raw=localStorage.getItem(STAMP_IMG_KEY)}catch(_){}
+    if(!raw)return;
+    try{
+        const o=JSON.parse(raw);
+        if(!o||!o.b64||!o.type)return;
+        editMarkImgData={arrayBuffer:_b64ToArrayBuffer(o.b64),type:o.type};
+        const mz=document.getElementById('editMarkImgZone');
+        if(mz)mz.innerHTML=T.editMarkImgSelectedHtml(escapeHtml(o.name||'image'));
+    }catch(_){try{localStorage.removeItem(STAMP_IMG_KEY)}catch(__){}}
+})();
 
 // 옵션 변경 → 썸네일 redraw
 ['editPanelPagenum','editPanelMark'].forEach(id=>{
@@ -1614,7 +1801,10 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
 });
 
 document.getElementById('editClearBtn').addEventListener('click',()=>{
+    // password 평문 명시 wipe (V13 보안)
+    editPages.forEach(p=>{if(p&&p.password!=null)p.password=null});
     editPages=[];editSourceNames=[];editSourceFiles=[];editCancelled.clear();_imgCache.clear();
+    _editClickHintShown=false; // 다음 PDF 시작 시 안내 다시 표시
     clearHistory();
     document.getElementById('editWorkspace').style.display='none';
     document.getElementById('editDropZone').style.display='';
@@ -1810,7 +2000,9 @@ function resetTool(id){
     view.querySelectorAll('[id$="PageContainer"]').forEach(c=>c.innerHTML='');
     if(id==='convert'){imgFiles=[];document.getElementById('img2pdfPreview').innerHTML='';document.getElementById('img2pdfActions').style.display='none';document.getElementById('img2pdfSizeGroup').style.display='none'}
     if(id==='edit'){
+        editPages.forEach(p=>{if(p&&p.password!=null)p.password=null});
         editPages=[];editSourceNames=[];editSourceFiles=[];_imgCache.clear();
+        _editClickHintShown=false;
         document.getElementById('editWorkspace').style.display='none';
         document.getElementById('editPageGrid').innerHTML='';
         document.getElementById('editFileList').innerHTML='';

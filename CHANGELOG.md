@@ -1,5 +1,53 @@
 # Changelog
 
+## [2026-04-29] — 3차 평가 라운드 (보안 + 사용성 + 접근성 + UI 다듬기)
+
+병렬 4개 에이전트(보안 1 + 사용성 페르소나 3) 평가를 거쳐 CRITICAL/HIGH 17건 일괄 적용.
+
+### 보안
+- **CSS 변수 self-reference 회귀 수정** — `--c-purple/--c-yellow/--c-green/--c-surface-2/-3/--c-border-2` 6개가 자기 자신을 참조해 `var()`가 unresolvable → 보라 primary 버튼 배경 transparent, toast 무효화, focus-ring 색 무효 등. 깃 히스토리에서 원래 색 복원
+- **CSP 강화** — `base-uri 'self'`, `object-src 'none'` 추가 (KO/EN). `frame-ancestors`는 meta CSP에서 무시되므로 `app.js`에 JS 클릭재킹 가드(`if(top!==self)top.location=self.location`)로 대체
+- **인앱 암호 모달** — `window.prompt()` (네이티브 회색 다이얼로그, 신뢰 의심 + 컨텍스트 상실) → 다크 SaaS 일관 디자인의 인앱 모달. 시도 횟수 노출, 실패 시 인라인 에러, [건너뛰기] 옵션, focus trap, Esc/Enter 동선
+- **password 평문 wipe** — `editClearBtn` / `resetTool('edit')`에서 `pg.password=null` 명시 wipe (V13)
+- **클릭 안내 OK 디자인** — 박스 핸들 클릭 영역 확장(`::before` pseudo로 hit-area +6px)
+
+### 사용성
+- **첫 방문자 카피 정렬** — 환영 배너에 "어느 카드 → 어느 작업" 매핑 가이드 추가, "합치기" 단어를 카드 진입 화면 desc에 복원, status 카피 의미 역전 수정 ("불필요한 페이지를 클릭해서 해제하세요" → "전체 페이지가 선택됨 — 그대로 저장하면 합쳐집니다"), 저장 라벨 자연스럽게 ("N페이지를 한 PDF로 합쳐서 저장" / "선택한 N페이지만 새 PDF로 저장")
+- **previewTitle 카피/동작 정합** — "원본 보기" → "크게 보고 텍스트·이미지 추가" (모달 진입 즉시 `addMode=true`로 캔버스 클릭이 박스 추가가 되는 동작과 일치)
+- **삭제 toast + Undo 버튼** — 페이지/파일/모두 회전 후 화면 하단에 검은 토스트 + [되돌리기] 버튼 (Gmail 패턴, 5초 후 자동 사라짐). `rotateAllConfirm` 다이얼로그 제거 — Undo가 있으니 confirm 불필요
+- **EDIT 그리드 범위 입력** — `[1-3, 5]` 형태로 비연속 페이지 한 번에 선택 (parseRange 재사용, CONVERT의 동일 패턴과 일치)
+- **박스 다중 선택 정렬 fix** — 첫 박스가 `_focusedBox` 상태일 때 두 번째 Shift+클릭 시 첫 박스도 자동으로 multi에 포함 (Figma/PowerPoint 표준 패턴). 6방향 정렬 버튼이 의도대로 노출
+- **박스 화살표 nudge** — 다중 선택 시 ←↑↓→ 1px 이동 (Shift+10px), pushHistory debounce(400ms)로 키 연타 시 undo 1단계로 묶임
+- **캔버스 클릭 hit-test** — 기존 박스 영역 ±8px 안 클릭 시 새 박스 생성 대신 기존 박스 focus + `caretRangeFromPoint`로 캐럿을 클릭 위치로 (글자 사이 빈 공간에 클릭해도 같은 박스 편집)
+- **클릭 안내 1회용** — "페이지의 원하는 위치를 클릭하면 텍스트가 추가됩니다" 안내가 EDIT 세션마다 첫 모달 진입 시 1회 [확인] 버튼과 함께 표시. EDIT 초기화 또는 새 첫 PDF 드롭 시 다시 표시
+- **도장 이미지 localStorage 저장** — 1MB 이하 이미지에 한해 base64로 보관, 다음 세션 자동 복원 (회사 도장은 평생 같은 PNG 가정)
+
+### 접근성 (WCAG 2.1 AA)
+- **모달 `role="dialog" aria-modal="true" aria-labelledby`** — 스크린리더에 다이얼로그 진입 명시
+- **status / error에 `aria-live`** — `editStatus/textStatus/img2pdfStatus/pdf2imgStatus`는 `polite`, `error-msg`는 `role="alert" aria-live="assertive"`. 진행률·완료·에러가 SR에 안내됨
+- **`.page-grid`에 `role="group" aria-label`** — 페이지 thumb 47개를 흐름으로 인지
+- **CONVERT 그리드 thumb 키보드 토글** — 기존 EDIT thumb처럼 `role="checkbox"` + Enter/Space 토글
+- **dropzone aria-label i18n** — `setupDropZone`의 한국어 하드코딩(`'PDF 파일 선택'`)을 `T.dropzoneAriaPdf/Image`로 분리 → EN 사이트가 한국어 SR 안내하던 문제 해결
+- **모달 `<span>` 닫기/네비를 `<button>`으로 교체** — 시맨틱 + Enter/Space 기본 동작 + tabindex 자동
+- **박스 핸들 모바일 32px** — `.page-text-box-del/-grip/.page-image-box-del` 모바일 분기 32x32 (WCAG 2.5.5)
+
+### UI 디자인
+- **모바일 카드 aspect-ratio** — 데스크톱 3:4 → 모바일 `aspect-ratio:auto;min-height:96px`로 첫 viewport에 3카드 모두 노출
+- **모달 닫기/네비 디자인** — `<button>` 변경 시 노출된 회색 user-agent 배경 → 흰색 원 + 검은 글자 + 검은 그림자(어떤 PDF 색 위에서도 visible) + hover scale(1.05). 좌우 ‹ › 버튼은 데스크톱에서 PDF 캔버스 바로 양 옆 28px gap (`modal-canvas-row` flex), 모바일은 viewport 양 끝 fixed 유지
+- **EDIT 그리드 추가 단축키 제거** — Ctrl+A/Delete/R/Ctrl+S/Ctrl+O 추가 검토 후 제거 (Ctrl+Z/Y만 유지). 화면 단축키 hint 텍스트도 제거
+- **페이지 thumb 컬러 도트 색대비** — `.page-thumb-source #444` → `var(--c-text-muted)` (1.4.3 본문 4.5:1 통과)
+
+### 다국어 / 환경
+- **EN lang 링크에 `index.html` 명시** — `./en/` → `./en/index.html` (file:// 환경에서 디렉토리 자동 resolve 안 됨)
+- **i18n KO=EN 96개 키 1:1 동기화** — 새 키(toast/clickHintOk/pwModal*/modalDialogLabel 등) 양쪽 동시 추가
+
+### 문서
+- **CLAUDE.md** — "향후 과업" 섹션 추가 (pdf.js worker self-host, JSZip 다중 PDF 분리 저장 — 사내 배포에 영향 없음)
+- **README.md** — 차별점/보안/접근성/다국어/구조 풀 리라이트
+- **EVALUATION.md** — 3차 평가 결과 (별도 라운드)
+
+---
+
 ## [2026-04-30] — 보안 강화 + 변환 도구 회전 + UX 가이드
 
 ### CSP `'unsafe-inline'` 제거 (script-src)
