@@ -1,5 +1,77 @@
 # Changelog
 
+## [2026-04-30] — 보안 강화 + 변환 도구 회전 + UX 가이드
+
+### CSP `'unsafe-inline'` 제거 (script-src)
+- 인라인 `<script>window.I18N=...</script>` → 외부 `assets/i18n-ko.js`, `assets/i18n-en.js` 분리
+- 모든 인라인 `onclick="..."` 제거 → `data-action` 속성 + 위임 핸들러 (`document.addEventListener('click')`)
+- 액션 종류: `home`, `tool`, `reset-tool`, `reset-convert`, `welcome-close`, `tip-close`
+- showError/showWarn/showComplete 의 innerHTML 안 인라인 onclick → addEventListener
+- 영향: V1 XSS 공격 표면 축소, V2 CSP defense-in-depth 강화
+- 한계: `style-src 'unsafe-inline'` 은 인라인 `style="display:none"` 다수 사용 중이라 유지 (별도 라운드)
+
+### pdf.js 옵션 강화
+- `isEvalSupported:false`, `enableXfa:false` — 위험 PDF 파싱 차단
+- `getPdfDoc(data, password)` 헬퍼로 5개 호출 사이트 통합
+- `SIZE_MAX = 300MB` 상한 — 그 이상 거부 (DOS 방어)
+- `setupDropZone` 에서 size 사전 검증 → 모든 도구에 자동 적용
+
+### PDF 암호 해제 UI
+- `unlockPdf(arrayBuffer, fileName)` 헬퍼 — `{doc, password}` 반환
+- 암호 PDF 감지 시 `window.prompt()` 3회 재시도, 정확한 password 보존
+- handleEditFiles / 텍스트 추출 / pdf2img 모두 적용
+- `pg.password` / `pdf2imgData.password` 로 후속 호출(openPageEditor, convertPdf2Img) 시 재사용
+- I18N: passwordPrompt, passwordWrong, passwordSkipped (KO/EN)
+- 한계: 암호 *설정* (출력 PDF에 암호 걸기) 은 미지원 — pdf-lib에 직접 지원 없음, qpdf-wasm 같은 별도 라이브러리 필요
+
+### 에러 핸들링 보강 (7곳)
+- img2pdf / pdf2img 변환 try-catch + 사용자 표시 에러
+- copyBtn 클립보드 + execCommand 폴백, 양쪽 실패 시 사용자 피드백
+- FileReader.onerror, Image.onerror 추가 (이미지 박스 / img2pdf)
+- pdf2img 종료 시 `pdf.destroy()` 명시 (메모리 회수)
+
+### 변환 도구 회전 추가
+- **이미지 → PDF**: 각 미리보기 좌상단 ↻ 버튼, 클릭 시 90° 누적, `transform:rotate()` 즉시 반영
+- 저장 시 회전된 이미지는 canvas로 pre-rotate 후 PNG 임베드 (정확)
+- **PDF → 이미지**: 각 페이지 썸네일 ↻ 버튼, pdf.js viewport rotation으로 canvas 재렌더 (정확한 종횡비)
+- 사용자 회전은 PDF 자연 회전(메타데이터)에 더해짐: `(naturalRot + userRot) % 360`
+- `renderPageGrid` 시그니처 확장: `getSel.getRotations()` 메서드로 rotations Map 노출
+
+### UX 가이드 — 첫 방문 / 도구 첫 진입
+- **홈 환영 배너** (welcome-banner): 첫 방문 시 `localStorage 'freepdf.welcomed'` 추적, dismiss 버튼
+- **변환 도구 회전 팁** (help-tip): 변환 도구 첫 진입 시, `localStorage 'freepdf.tip.convertRotate'` 추적
+- 일반화된 `showTipIfNew(tipKey, elementId)` + `tip-close` 위임 핸들러 → 향후 다른 도구 팁도 같은 패턴
+
+### 변환 도구 적용 버튼 → 저장 버튼 명확화
+- "PDF로 변환" / "이미지로 변환" → "PDF로 저장" / "이미지로 저장" 라벨
+- 옵션 select는 단순 값 변경, *저장 버튼* 클릭이 명시적 다운로드 트리거
+- (중간에 자동 변환으로 갔다가 사용자 의도 재해석 후 원복)
+
+### 미리보기 화질
+- pdf2img 페이지 그리드 스케일: `0.25` → `0.5 * dpr` (편집 도구와 동일 dpr boost)
+- img-preview-item img: `image-rendering:high-quality` 힌트
+- canvas 내부 픽셀 ~4-6배 증가 → 다운스케일 시 선명
+
+### 첫 방문 + 모달 다듬기
+- 모달 클릭 안내(modal-click-hint) `✨` 이모지 제거 — 텍스트만
+- 미리보기 안내(modal-preview-note) 빨간색 배경 + 흰 글자로 강조
+- 메인 페이지 헤더 여백 축소: `header margin-bottom 80px → 40px`, `header p margin-bottom 100px → 32px`
+- 글자색/배경색 select 사이 divider 추가, 라벨 ::before 아이콘 (A 밑줄 / 색 박스) 으로 즉시 식별
+- 변환 도구 메인 툴바 흰색 배경 + soft shadow
+
+### 버그 수정
+- **detached ArrayBuffer**: pdf2img 재로드 시 buffer transfer 후 재사용 → `renderPageGrid` 내부 `arrayBuffer.slice(0)` + `convertPdf2Img` 슬라이스
+- **모달 회전 메타데이터 무시**: PDF 자체 회전(예: 90° 메타) 가 모달 미리보기에서 사라지던 버그 → `pg.naturalRotation = baseVp.rotation` 저장 + `(naturalRotation + userRotation) % 360` 합산
+- **같은 파일 두 번 추가 시 사이드바 안 뜨는 버그**: editSourceNames 중복 차단 → `(2)`, `(3)` suffix 자동 부여, 사이드바 별개 항목 노출
+
+### 페이지 단위 삭제
+- 썸네일에 ✕ 삭제 버튼 (회전/확대 옆), hover 시 빨간 배경
+- 클릭 시 editPages에서 splice + 그 sourceFile에 페이지 없으면 sourceNames도 제거
+- 모든 페이지 사라지면 clearBtn cascade
+- Undo로 복원 가능
+
+---
+
 ## [2026-04-29] — Undo/Redo + 모바일 모달 + 이미지 회전 좌표
 
 ### Undo/Redo (P0-6)

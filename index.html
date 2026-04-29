@@ -6,7 +6,7 @@
     <title>free.pdf — PDF 편집 · 변환 · 워터마크</title>
     <link rel="alternate" hreflang="ko" href="./">
     <link rel="alternate" hreflang="en" href="./en/">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; form-action 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; form-action 'none';">
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" integrity="sha384-2p6U+1mmqF10USehFeRiyG2ESG9FwIqN+jxULn5w9jjQIihSn9Pt13dVCn/Hawjn" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
@@ -18,27 +18,36 @@
     <div class="container">
         <div class="top-bar">
             <div class="top-bar-left">
-                <a class="logo" onclick="showHome()">free.pdf</a>
+                <a class="logo" data-action="home">free.pdf</a>
                 <span class="breadcrumb" id="breadcrumb" style="display:none">›</span>
                 <span class="breadcrumb-name" id="breadcrumbName" style="display:none"></span>
             </div>
             <a class="lang-btn" href="./en/">English</a>
         </div>
         <header>
-            <h1 onclick="showHome()">간단한 PDF 작업을<br>브라우저에서 안전하게</h1>
+            <h1 data-action="home">간단한 PDF 작업을<br>브라우저에서 안전하게</h1>
             <p>모든 작업은 브라우저에서만 처리됩니다. 파일이 외부 서버로 전송되지 않습니다.</p>
         </header>
 
 <!-- HOME -->
-<div class="view active" id="view-home"><div class="tool-grid">
-    <button type="button" class="tool-card" onclick="showTool('edit')" aria-label="PDF 편집 — 합치기, 추출, 삭제, 회전"><span class="tool-card-kicker">EDIT</span><span class="tool-card-big">EDIT</span><h3>PDF 편집</h3><span class="tool-card-tags"><span>합치기</span><span>추출</span><span>삭제</span><span>회전</span></span></button>
-    <button type="button" class="tool-card" onclick="showTool('convert')" aria-label="이미지 변환 — 이미지를 PDF로, PDF를 이미지로"><span class="tool-card-kicker">CONVERT</span><span class="tool-card-big">CON<br>VERT</span><h3>이미지 변환</h3><span class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></span></button>
-    <button type="button" class="tool-card" onclick="showTool('text')" aria-label="텍스트 추출 — PDF에서 텍스트 복사 및 TXT 저장"><span class="tool-card-kicker">TEXT</span><span class="tool-card-big">TEXT</span><h3>텍스트 추출</h3><span class="tool-card-tags"><span>텍스트 복사</span><span>TXT 저장</span></span></button>
+<div class="view active" id="view-home">
+<div class="welcome-banner" id="welcomeBanner" role="region" aria-label="환영 메시지" hidden>
+    <div class="welcome-icon" aria-hidden="true">👋</div>
+    <div class="welcome-body">
+        <strong class="welcome-title">free.pdf 에 오신 걸 환영합니다</strong>
+        <p class="welcome-text">PDF 편집·변환·텍스트 추출이 모두 <b>브라우저 안에서만</b> 처리됩니다. 파일이 외부 서버로 전송되지 않습니다. 아래 카드 중 원하는 도구를 선택하세요.</p>
+    </div>
+    <button type="button" class="welcome-close" data-action="welcome-close" aria-label="환영 메시지 닫기">✕</button>
+</div>
+<div class="tool-grid">
+    <button type="button" class="tool-card" data-action="tool" data-tool="edit" aria-label="PDF 편집 — 합치기, 추출, 삭제, 회전"><span class="tool-card-kicker">EDIT</span><span class="tool-card-big">EDIT</span><h3>PDF 편집</h3><span class="tool-card-tags"><span>합치기</span><span>추출</span><span>삭제</span><span>회전</span></span></button>
+    <button type="button" class="tool-card" data-action="tool" data-tool="convert" aria-label="이미지 변환 — 이미지를 PDF로, PDF를 이미지로"><span class="tool-card-kicker">CONVERT</span><span class="tool-card-big">CON<br>VERT</span><h3>이미지 변환</h3><span class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></span></button>
+    <button type="button" class="tool-card" data-action="tool" data-tool="text" aria-label="텍스트 추출 — PDF에서 텍스트 복사 및 TXT 저장"><span class="tool-card-kicker">TEXT</span><span class="tool-card-big">TEXT</span><h3>텍스트 추출</h3><span class="tool-card-tags"><span>텍스트 복사</span><span>TXT 저장</span></span></button>
 </div></div>
 
 <!-- PDF 편집 (합치기+나누기+삭제+추출+회전 통합) -->
 <div class="view" id="view-edit">
-    <button class="back-btn" onclick="showHome()">← 돌아가기</button>
+    <button class="back-btn" data-action="home">← 돌아가기</button>
     <div class="tool-title">PDF 편집</div>
     <div class="tool-desc">페이지를 선택하고, 순서를 바꾸고, 회전해서 저장하세요<br><span class="tool-hint">각 페이지 우측 상단의 ⤢ 버튼으로 크게 보면 텍스트·이미지 추가가 가능합니다</span></div>
     <div class="drop-zone" id="editDropZone"><div class="drop-zone-icon">EDIT</div><div class="drop-zone-text">PDF 파일을 드래그하거나 클릭</div><div class="drop-zone-sub">여러 파일 선택 가능 · 추가로 더 넣을 수 있습니다</div></div>
@@ -57,7 +66,8 @@
                     <button class="edit-tb-btn" id="editTbAddFile"><span class="edit-tb-icon">+</span> 파일</button>
                     <button class="edit-tb-btn" id="editTbPagenum"><span class="edit-tb-icon">#</span> 페이지 번호 <span class="edit-tb-check">✓</span></button>
                     <button class="edit-tb-btn" id="editTbMark"><span class="edit-tb-icon">⊕</span> 워터마크 <span class="edit-tb-check">✓</span></button>
-                    <button class="edit-tb-btn edit-tb-right" id="editSelectToggle">전체 해제</button>
+                    <button class="edit-tb-btn edit-tb-right" id="editTbRotateAll" title="모든 페이지 90° 회전"><span class="edit-tb-icon">↻</span> 모두 회전</button>
+                    <button class="edit-tb-btn" id="editSelectToggle">전체 해제</button>
                 </div>
                 <div class="edit-stamp-panel" id="editPanelPagenum" style="display:none">
                     <label class="edit-panel-toggle"><input type="checkbox" id="editPagenumEnable"> <span>페이지 번호 적용</span></label>
@@ -106,7 +116,7 @@
 
 <!-- 텍스트 추출 -->
 <div class="view" id="view-text">
-    <button class="back-btn" onclick="showHome()">← 돌아가기</button>
+    <button class="back-btn" data-action="home">← 돌아가기</button>
     <div class="tool-title">텍스트 추출</div>
     <div class="tool-desc">PDF에서 텍스트를 추출합니다</div>
     <div class="drop-zone" id="textDropZone"><div class="drop-zone-icon">TEXT</div><div class="drop-zone-text">PDF 파일을 넣어주세요</div><div class="drop-zone-sub">파일 1개 선택</div></div>
@@ -116,17 +126,25 @@
     <div class="status" id="textStatus"></div>
     <div class="text-result" id="textResult">
         <textarea id="extractedText" readonly></textarea>
-        <div class="text-actions"><button class="btn btn-secondary" onclick="resetTool('text')">초기화</button><button class="btn btn-primary" id="copyBtn">복사하기</button><button class="btn btn-primary" id="downloadTxtBtn">TXT 다운로드</button></div>
+        <div class="text-actions"><button class="btn btn-secondary" data-action="reset-tool" data-tool="text">초기화</button><button class="btn btn-primary" id="copyBtn">복사하기</button><button class="btn btn-primary" id="downloadTxtBtn">TXT 다운로드</button></div>
     </div>
 </div>
 
 
 <!-- 이미지 변환 -->
 <div class="view" id="view-convert">
-    <button class="back-btn" onclick="showHome()">← 돌아가기</button>
+    <button class="back-btn" data-action="home">← 돌아가기</button>
     <div class="tool-title">이미지 변환</div>
     <div class="form-group" style="margin-bottom:20px">
         <div class="actions" style="margin-bottom:0"><button class="btn btn-primary btn-sm" id="convertModeImg2pdf">이미지 → PDF</button><button class="btn btn-secondary btn-sm" id="convertModePdf2img">PDF → 이미지</button></div>
+    </div>
+    <div class="welcome-banner help-tip" id="convertRotateTip" role="region" aria-label="도구 사용 팁" hidden>
+        <div class="welcome-icon" aria-hidden="true">💡</div>
+        <div class="welcome-body">
+            <strong class="welcome-title">회전도 가능해요</strong>
+            <p class="welcome-text">업로드한 각 이미지/페이지에 마우스를 올리면 <b>↻ 회전 버튼</b>이 나타납니다. 저장 전에 90°씩 회전할 수 있어요.</p>
+        </div>
+        <button type="button" class="welcome-close" data-action="tip-close" data-tip="convertRotate" aria-label="팁 닫기">✕</button>
     </div>
     <!-- 이미지→PDF 모드 -->
     <div id="convertImg2pdfView">
@@ -137,7 +155,7 @@
         <div class="form-group" id="img2pdfSizeGroup" style="display:none"><label class="form-label">페이지 크기</label><select class="form-select" id="img2pdfPageSize"><option value="original">원본 크기</option><option value="a4fit">A4 맞춤</option></select></div>
         <div class="img-preview-list" id="img2pdfPreview"></div>
         <div class="status" id="img2pdfStatus"></div>
-        <div class="actions" id="img2pdfActions" style="display:none"><button class="btn btn-secondary" onclick="resetConvert()">초기화</button><button class="btn btn-primary" id="img2pdfBtn">PDF로 변환</button></div>
+        <div class="actions" id="img2pdfActions" style="display:none"><button class="btn btn-secondary" data-action="reset-convert">초기화</button><button class="btn btn-primary" id="img2pdfBtn">PDF로 저장</button></div>
     </div>
     <!-- PDF→이미지 모드 -->
     <div id="convertPdf2imgView" style="display:none">
@@ -153,7 +171,7 @@
             <div id="pdf2imgPageContainer"></div>
             <div class="progress-bar" id="pdf2imgProgress"><div class="progress-bar-fill" id="pdf2imgProgressFill"></div></div>
             <div class="status" id="pdf2imgStatus"></div>
-            <div class="actions"><button class="btn btn-secondary" onclick="resetConvert()">초기화</button><button class="btn btn-primary" id="pdf2imgBtn">이미지로 변환</button></div>
+            <div class="actions"><button class="btn btn-secondary" data-action="reset-convert">초기화</button><button class="btn btn-primary" id="pdf2imgBtn">이미지로 저장</button></div>
         </div>
     </div>
 </div>
@@ -161,82 +179,7 @@
         <footer><p>free.pdf · kgh.hyeon@gmail.com</p></footer>
     </div>
 
-<script>
-window.I18N={
-    consoleEncrypted:'[free.pdf] 권한 보호 PDF — 제한 우회됨',
-    backToTools:'도구 목록으로 →',
-    toolNames:{edit:'PDF 편집',convert:'이미지 변환',text:'텍스트 추출'},
-    fmtImage:'JPG, PNG',
-    fmtPdf:'PDF',
-    errBadFormat:fmt=>`지원하지 않는 파일 형식입니다. ${fmt} 파일을 넣어주세요.`,
-    errFileRead:name=>`"${name}" 읽기 실패`,
-    errPrefix:'오류: ',
-    largeFileWarn:(name,size)=>`"${name}" 파일이 큽니다 (${size}). 브라우저에서 처리하므로 시간이 걸릴 수 있습니다.`,
-    selectAll:'전체 선택',
-    deselectAll:'전체 해제',
-    rangePlaceholder:'범위 입력 (예: 1-3, 5)',
-    apply:'적용',
-    fileMeta:(size,count)=>`${size} · ${count}페이지`,
-    deleteTitle:'삭제',
-    rotateTitle:'90° 회전',
-    previewTitle:'원본 보기',
-    addBtn:'+ 추가',
-    editStatusSelect:'저장할 페이지를 선택하세요',
-    editStatusAllSelected:'불필요한 페이지를 클릭해서 해제하세요',
-    editStatusSome:(sel,total)=>`${total}페이지 중 ${sel}페이지 선택`,
-    btnSave:'저장',
-    btnSavePages:sel=>`${sel}페이지 저장`,
-    btnMergeSave:sel=>`${sel}페이지 합쳐서 저장`,
-    btnExtractSave:sel=>`${sel}페이지 추출해서 저장`,
-    btnProcessing:'처리 중...',
-    editProgress:(i,total)=>`처리 중... (${i}/${total}페이지)`,
-    saveComplete:'저장 완료!',
-    zoomIn:'크게 보기',
-    zoomOut:'작게 보기',
-    textExtracting:'추출 중...',
-    textPageHeader:i=>`--- ${i}페이지 ---`,
-    textNotFound:'텍스트를 찾을 수 없습니다. 이미지 PDF일 수 있습니다.',
-    textExtracted:n=>`${n}페이지에서 추출 완료`,
-    copy:'복사하기',
-    copyDone:'복사 완료!',
-    editMarkImgZoneInitHtml:'<div class="drop-zone-icon">IMG</div><div class="drop-zone-text">이미지를 선택하세요</div><div class="drop-zone-sub">PNG (투명 배경 권장)</div>',
-    editMarkImgSelectedHtml:name=>`<div class="drop-zone-icon">OK</div><div class="drop-zone-text">이미지 선택됨</div><div class="drop-zone-sub">${name}</div>`,
-    done:'완료!',
-    imgCount:n=>`${n}개 이미지`,
-    pagesSelected:n=>`${n}페이지 선택됨`,
-    totalPagesAll:t=>`총 ${t}페이지 (선택 안 하면 전체 변환)`,
-    imagesDownloaded:n=>`${n}개 이미지 다운로드 완료!`,
-    rotateClearsBoxes:'이 페이지에 추가한 텍스트 박스가 모두 삭제됩니다. 회전을 계속할까요?',
-    deletePageTitle:'페이지 삭제',
-    fontFallbackWarn:'한글 폰트 로드 실패: 한글 텍스트는 정상 표시되지 않을 수 있습니다. (배포된 사이트나 로컬 서버에서 사용하세요)',
-    modalPreviewNote:'미리보기는 화면 표시용입니다. 저장 시에는 원본 PDF 화질 그대로 출력됩니다.',
-    modalAddText:'+ 텍스트',
-    modalAddTextActive:'✕ 종료',
-    modalTextHint:'페이지를 클릭하여 텍스트를 추가하세요',
-    modalAddImage:'+ 이미지',
-    modalImageDelTitle:'이미지 삭제',
-    modalImageResizeTitle:'크기 조절',
-    modalSizeLabel:'크기',
-    modalColorLabel:'색상',
-    modalBgLabel:'배경',
-    modalBoldTitle:'굵게',
-    modalUnderlineTitle:'밑줄',
-    modalColorPickerTitle:'직접 색상 선택',
-    modalBgPickerTitle:'직접 배경색 선택',
-    boxAlignLeftTitle:'박스 좌측 맞춤',
-    boxAlignCenterHTitle:'박스 가로 가운데 맞춤',
-    boxAlignRightTitle:'박스 우측 맞춤',
-    boxAlignTopTitle:'박스 상단 맞춤',
-    boxAlignCenterVTitle:'박스 세로 가운데 맞춤',
-    boxAlignBottomTitle:'박스 하단 맞춤',
-    modalAlignLeftTitle:'왼쪽 정렬',
-    modalAlignCenterTitle:'가운데 정렬',
-    modalAlignRightTitle:'오른쪽 정렬',
-    modalSizeOptions:[{v:'10',t:'작게'},{v:'14',t:'보통'},{v:'20',t:'크게'},{v:'28',t:'아주 크게'}],
-    modalColorOptions:[{v:'#222',t:'검정'},{v:'#666',t:'회색'},{v:'#fff',t:'흰색'},{v:'#dc2626',t:'빨강'},{v:'#2563eb',t:'파랑'},{v:'#16a34a',t:'초록'}],
-    modalBgOptions:[{v:'',t:'없음'},{v:'#fef3c7',t:'노랑'},{v:'#dbeafe',t:'하늘'},{v:'#fecaca',t:'분홍'},{v:'#000',t:'검정'},{v:'#fff',t:'흰색'}]
-};
-</script>
+<script src="assets/i18n-ko.js"></script>
 <script src="assets/app.js"></script>
 <script data-goatcounter="https://kgh-kang.goatcounter.com/count"
         async src="https://gc.zgo.at/count.js"></script>

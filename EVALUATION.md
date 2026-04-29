@@ -1,4 +1,70 @@
-# 사이트 종합 평가 (2026-04-29)
+# 사이트 종합 평가
+
+## 2026-04-30 — 2차 평가 (6 에이전트 병렬)
+
+이전 라운드 (2026-04-29) 의 P0 7건 + 후속 변경(CSP 강화, password UI, 변환 도구 회전, 환영/팁 배너, 페이지 단위 ✕ 삭제 등) 적용 후 재평가.
+
+### 점수 변화
+
+| 관점 | 1차 (4-29) | 2차 (4-30) | 변화 |
+|------|:----:|:----:|:----:|
+| 보안 위험도 (낮을수록 안전) | 5.5/10 | ~3.5/10 | ▼ V1/V2 해결 |
+| WCAG 2.1 AA | 3.5/10 | 4.5/10 | ▲ +1.0 |
+| 디자인 일관성 | Linear 70-80% | 40/100 | 더 엄격한 기준 |
+| 파워유저 효율 | C | B- (5.5/10) | ▲ Undo/Redo |
+| 첫 방문자 직관성 | C+ | B | ▲ 환영 배너 |
+| 코드 유지보수 | C | C+ | ▲ 데드 i18n 0개 |
+
+### 통합 우선순위
+
+**🔴 CRITICAL (가성비 최고, 수 분 단위)**
+1. textExtract `pdf.destroy()` 누락 (코드 헬스, app.js:1524)
+2. `.modal-tb-label color:#555` → `#333` (접근성, 색대비 미달)
+3. `prefers-reduced-motion` @media query 미대응 (접근성)
+4. EN CSP `script-src` 에서 `gc.zgo.at` 누락 → KO/EN 비대칭 (보안 V8)
+5. `URL.revokeObjectURL` 누락 (보안 V11 / 메모리 누수)
+
+**🟠 HIGH**
+- 모달 focus 복귀 + focus trap (접근성 P0)
+- localStorage 마지막 옵션 기억 (편의성 +15-20%)
+- CSS 변수 도입 + 8px 그리드 정규화 + 타이포 rem 통일 (디자인 토대)
+- pdf.js worker self-host + SRI (보안 V5)
+- 썸네일 ✕/↻ 모바일 44px 터치 타겟 (접근성/UX)
+- `_imgCache` 개별 삭제 시 leak (코드 헬스)
+
+**🟡 MED**
+- 다중 페이지 일괄 박스 적용 (편의성 +75%)
+- 버튼 시스템 통합 (8개 클래스 → 3-4개)
+- 키보드 단축키 hint (모달 상단 안내)
+- 빠른 액션 프리셋 ("모든 페이지에 번호 / DRAFT" 1클릭)
+- welcome / tip 배너 ARIA role
+
+**🟢 LOW**
+- 이모지 → SVG 통일
+- 100+ 페이지 메모리 최적화 (가상화)
+- `style-src 'unsafe-inline'` 제거
+- 영문 카피 미세 다듬기
+- 박스 템플릿 저장
+
+### 신규 위협 (V8-V14)
+- V8 [MED-HIGH] EN CSP `gc.zgo.at` 누락
+- V9 [MED] pdf.js worker URL 동적 + SRI 미적용
+- V10 [MED] `renderPageGrid` 내 `.onclick=` 직할당 3곳 (CSP 우회 가능성 낮으나 패턴 불일치)
+- V11 [MED] `URL.createObjectURL(Blob)` revoke 누락
+- V12 [MED] 파일 위장 차단 약함 (`.pdf.exe` 등 매직 바이트 미검증)
+- V13 [LOW] `window.prompt()` 평문 암호 메모리 잔존
+- V14 [LOW] localStorage 키 사용자 행동 추적 가능
+
+### 다음 라운드 패키지 (권장 순서: A → C → B → D)
+
+- **A. 가성비 빅뱅** (1-2시간) — CRITICAL 5건. *현재 진행 대상*
+- **B. 디자인 시스템 라운드** (1일) — CSS 변수 + 8px + 타이포 rem
+- **C. 편의성 라운드** (1일) — localStorage 옵션 + 다중 페이지 박스 + 빠른 프리셋
+- **D. 접근성 마무리** (반나절) — focus 관리 + 모바일 터치 + 키보드 hint + ARIA
+
+---
+
+## 2026-04-29 — 1차 평가 (7 에이전트 페르소나)
 
 7개 에이전트 페르소나로 병렬 평가 진행. 각 에이전트는 별도 컨텍스트로 독립 분석.
 

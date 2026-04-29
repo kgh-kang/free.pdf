@@ -87,8 +87,8 @@ async function embedPretendard(pdfDoc){
 const T=window.I18N;
 
 // ===== Error/Warning display =====
-function showError(errEl,msg){errEl.innerHTML=`${escapeHtml(msg)}<button class="error-msg-close" onclick="this.parentElement.classList.remove('show')">&times;</button>`;errEl.classList.add('show')}
-function showWarn(parentEl,msg){const existing=parentEl.querySelector('.warn-msg');if(existing)existing.remove();const w=document.createElement('div');w.className='warn-msg';w.innerHTML=`${escapeHtml(msg)}<button class="warn-msg-close" onclick="this.parentElement.remove()">&times;</button>`;const target=parentEl.querySelector('.drop-zone');if(target)target.insertAdjacentElement('afterend',w);else parentEl.prepend(w)}
+function showError(errEl,msg){errEl.innerHTML=`${escapeHtml(msg)}<button class="error-msg-close" type="button">&times;</button>`;errEl.classList.add('show');const btn=errEl.querySelector('.error-msg-close');if(btn)btn.addEventListener('click',()=>errEl.classList.remove('show'))}
+function showWarn(parentEl,msg){const existing=parentEl.querySelector('.warn-msg');if(existing)existing.remove();const w=document.createElement('div');w.className='warn-msg';w.innerHTML=`${escapeHtml(msg)}<button class="warn-msg-close" type="button">&times;</button>`;const target=parentEl.querySelector('.drop-zone');if(target)target.insertAdjacentElement('afterend',w);else parentEl.prepend(w);const btn=w.querySelector('.warn-msg-close');if(btn)btn.addEventListener('click',()=>w.remove())}
 
 // ===== Helpers =====
 async function loadPdf(ab){const pdf=await PDFLib.PDFDocument.load(ab,{ignoreEncryption:true});if(pdf.isEncrypted)console.warn(T.consoleEncrypted);return pdf}
@@ -96,14 +96,93 @@ function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFix
 function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
 function parseRange(str,max){const pages=new Set();str.split(',').forEach(p=>{p=p.trim();const m=p.match(/^(\d+)\s*-\s*(\d+)$/);if(m){for(let i=Math.max(1,+m[1]);i<=Math.min(max,+m[2]);i++)pages.add(i-1)}else{const n=parseInt(p);if(n>=1&&n<=max)pages.add(n-1)}});return Array.from(pages).sort((a,b)=>a-b)}
-function showComplete(statusEl,msg){statusEl.innerHTML=`${msg} <button class="completion-link" onclick="showHome()">${T.backToTools}</button>`}
+function showComplete(statusEl,msg){statusEl.innerHTML=`${msg} <button class="completion-link" type="button" data-action="home">${T.backToTools}</button>`}
 
 const toolNames=T.toolNames;
 function showHome(push=true){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-home').classList.add('active');document.querySelector('header').classList.remove('collapsed');document.getElementById('breadcrumb').style.display='none';document.getElementById('breadcrumbName').style.display='none';window.scrollTo(0,0);if(push)history.pushState({view:'home'},'','#')}
-function showTool(id,push=true){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-'+id).classList.add('active');document.querySelector('header').classList.add('collapsed');document.getElementById('breadcrumb').style.display='';document.getElementById('breadcrumbName').style.display='';document.getElementById('breadcrumbName').textContent=toolNames[id]||id;window.scrollTo(0,0);if(push)history.pushState({view:id},'','#'+id)}
+function showTool(id,push=true){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-'+id).classList.add('active');document.querySelector('header').classList.add('collapsed');document.getElementById('breadcrumb').style.display='';document.getElementById('breadcrumbName').style.display='';document.getElementById('breadcrumbName').textContent=toolNames[id]||id;window.scrollTo(0,0);if(push)history.pushState({view:id},'','#'+id);if(id==='convert')showTipIfNew('convertRotate','convertRotateTip')}
 window.addEventListener('popstate',e=>{if(e.state&&e.state.view&&e.state.view!=='home')showTool(e.state.view,false);else showHome(false)});
 if(location.hash&&location.hash.length>1){const id=location.hash.slice(1);if(document.getElementById('view-'+id))showTool(id,false)}
 history.replaceState({view:location.hash?location.hash.slice(1):'home'},'');
+
+// CSP-safe 이벤트 위임 (인라인 onclick 대체)
+document.addEventListener('click',e=>{
+    const el=e.target.closest('[data-action]');
+    if(!el)return;
+    const a=el.dataset.action;
+    if(a==='home')showHome();
+    else if(a==='tool')showTool(el.dataset.tool);
+    else if(a==='reset-tool')resetTool(el.dataset.tool);
+    else if(a==='reset-convert')resetConvert();
+    else if(a==='welcome-close')dismissWelcome();
+    else if(a==='tip-close'){
+        const tipKey=el.dataset.tip;
+        const banner=el.closest('.help-tip');
+        if(banner)banner.hidden=true;
+        try{localStorage.setItem('freepdf.tip.'+tipKey,'1')}catch(_){}
+    }
+});
+
+// 도구별 첫 진입 팁 표시 (localStorage 'freepdf.tip.<key>' 로 dismiss 추적)
+function showTipIfNew(tipKey,elementId){
+    let dismissed=false;
+    try{dismissed=localStorage.getItem('freepdf.tip.'+tipKey)==='1'}catch(_){dismissed=false}
+    if(dismissed)return;
+    const el=document.getElementById(elementId);
+    if(el)el.hidden=false;
+}
+
+// HTML 안 [data-i18n] 자동 채우기 — 정적 텍스트 i18n
+document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k=el.dataset.i18n;const v=T[k];
+    if(typeof v==='string')el.textContent=v;
+});
+
+// localStorage 로 옵션 값 보존 — 사용자가 자주 쓰는 설정을 다음 세션에 자동 복원
+const PERSIST_OPT_IDS=[
+    'editPagenumEnable','editPagenumPos','editPagenumStart','editPagenumFormat',
+    'editMarkEnable','editMarkText','editMarkSize','editMarkLayout',
+    'editMarkImgPos','editMarkImgSize',
+    'img2pdfPageSize','pdf2imgFormat','pdf2imgScale',
+];
+function _persistKey(id){return 'freepdf.opt.'+id}
+PERSIST_OPT_IDS.forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const key=_persistKey(id);
+    let saved=null;
+    try{saved=localStorage.getItem(key)}catch(_){}
+    if(saved!==null){
+        if(el.type==='checkbox')el.checked=saved==='1';
+        else el.value=saved;
+        // 기존 change 핸들러 (UI sync) 트리거
+        el.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    el.addEventListener('change',()=>{
+        try{
+            const val=el.type==='checkbox'?(el.checked?'1':'0'):el.value;
+            localStorage.setItem(key,val);
+        }catch(_){}
+    });
+    if(el.type==='text'||el.type==='number'){
+        el.addEventListener('input',()=>{
+            try{localStorage.setItem(key,el.value)}catch(_){}
+        });
+    }
+});
+
+// 첫 방문 환영 배너 — localStorage 'freepdf.welcomed' 로 추적
+const WELCOME_KEY='freepdf.welcomed';
+function dismissWelcome(){
+    const b=document.getElementById('welcomeBanner');
+    if(b)b.hidden=true;
+    try{localStorage.setItem(WELCOME_KEY,'1')}catch(_){}
+}
+(function showWelcomeIfFirstVisit(){
+    let visited=false;try{visited=localStorage.getItem(WELCOME_KEY)==='1'}catch(_){visited=false}
+    if(visited)return;
+    const b=document.getElementById('welcomeBanner');
+    if(b)b.hidden=false;
+})();
 
 function setupDropZone(dzId,fiId,cb,opts={}){
     const dz=document.getElementById(dzId),fi=document.getElementById(fiId);
@@ -120,32 +199,90 @@ function setupDropZone(dzId,fiId,cb,opts={}){
         const valid=accept==='image/*'?files.filter(f=>f.type.startsWith('image/')):files.filter(f=>f.type===accept||f.name.toLowerCase().endsWith('.pdf'));
         const errId=dzId.replace('DropZone','Error');const errEl=document.getElementById(errId);
         if(!valid.length&&errEl){showError(errEl,T.errBadFormat(accept==='image/*'?T.fmtImage:T.fmtPdf));return}
+        const ok=valid.filter(f=>!tooLarge(f));
+        if(ok.length<valid.length&&errEl){const big=valid.find(tooLarge);showError(errEl,T.errFileTooLarge(big.name,formatSize(SIZE_MAX)))}
+        if(!ok.length)return;
         if(errEl)errEl.classList.remove('show');
-        cb(multi?valid:[valid[0]])});
-    fi.addEventListener('change',e=>{cb(Array.from(e.target.files));fi.value=''});
+        cb(multi?ok:[ok[0]])});
+    fi.addEventListener('change',e=>{
+        const files=Array.from(e.target.files);fi.value='';
+        const ok=files.filter(f=>!tooLarge(f));
+        if(ok.length<files.length){
+            const errId=dzId.replace('DropZone','Error');const errEl=document.getElementById(errId);
+            const big=files.find(tooLarge);
+            if(errEl)showError(errEl,T.errFileTooLarge(big.name,formatSize(SIZE_MAX)));
+        }
+        if(ok.length)cb(ok);
+    });
 }
 const SIZE_WARN=50*1024*1024;
+const SIZE_MAX=300*1024*1024; // 상한 300MB — 그 이상은 거부
+const PDFJS_SAFE_OPTS={isEvalSupported:false,enableXfa:false};
 function checkLargeFiles(files,viewEl){if(!viewEl)return;files.forEach(f=>{if(f.size>SIZE_WARN)showWarn(viewEl,T.largeFileWarn(f.name,formatSize(f.size)))})}
+function tooLarge(file){return file&&file.size>SIZE_MAX}
+function getPdfDoc(data,password){
+    const opts={data,...PDFJS_SAFE_OPTS};
+    if(password!=null)opts.password=password;
+    return pdfjsLib.getDocument(opts).promise;
+}
+// 암호 보호 PDF 자동 감지 + 사용자 prompt (3회 시도)
+async function unlockPdf(arrayBuffer,fileName){
+    try{return{doc:await getPdfDoc(arrayBuffer.slice(0)),password:null}}
+    catch(e){
+        if(!/password/i.test(String(e&&e.message||e||'')))throw e;
+    }
+    for(let i=0;i<3;i++){
+        const label=(fileName?`${fileName}\n\n`:'')+T.passwordPrompt;
+        const pwd=window.prompt(label);
+        if(pwd===null){const err=new Error(T.passwordSkipped);err.skipped=true;throw err}
+        try{return{doc:await getPdfDoc(arrayBuffer.slice(0),pwd),password:pwd}}
+        catch(e2){
+            if(!/password/i.test(String(e2&&e2.message||e2||'')))throw e2;
+            if(i===2){const err=new Error(T.passwordWrong);err.passwordFail=true;throw err}
+        }
+    }
+}
+async function getPdfDocSafe(arrayBuffer,fileName){return(await unlockPdf(arrayBuffer,fileName)).doc}
 
 // Page thumbnail renderer with controls (select all, range input)
 async function renderPageGrid(arrayBuffer,containerId,opts={}){
     const container=document.getElementById(containerId);container.innerHTML='';
-    const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    const pdf=await getPdfDoc(arrayBuffer.slice(0),opts.password);
     const selected=new Set();const total=pdf.numPages;
+    const rotations=new Map(); // pageIdx → 0/90/180/270
     // Controls
     const ctrl=document.createElement('div');ctrl.className='page-grid-controls';
     ctrl.innerHTML=`<button class="btn btn-sm btn-secondary" data-act="all">${T.selectAll}</button><button class="btn btn-sm btn-secondary" data-act="none">${T.deselectAll}</button><input class="form-input" placeholder="${T.rangePlaceholder}" data-act="range"><button class="btn btn-sm btn-primary" data-act="apply">${T.apply}</button>`;
     container.appendChild(ctrl);
     const grid=document.createElement('div');grid.className='page-grid';container.appendChild(grid);
     const thumbs=[];
+    const thumbDpr=Math.max(2,window.devicePixelRatio||1);
+    const thumbScale=0.5;
     for(let i=1;i<=total;i++){
-        const page=await pdf.getPage(i);const vp=page.getViewport({scale:.25});
+        const page=await pdf.getPage(i);const vp=page.getViewport({scale:thumbScale*thumbDpr});
         const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
         await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
         const div=document.createElement('div');div.className='page-thumb';div.dataset.idx=i-1;
-        div.innerHTML=`<div class="page-thumb-check">✓</div>`;div.insertBefore(canvas,div.firstChild);
+        div.innerHTML=`<div class="page-thumb-check">✓</div><div class="page-thumb-actions"><button class="page-thumb-btn" data-act="rotate" type="button" title="${T.rotateTitle}" aria-label="${T.rotateTitle}">↻</button></div>`;
+        div.insertBefore(canvas,div.firstChild);
         const num=document.createElement('div');num.className='page-thumb-num';num.textContent=i+'p';div.appendChild(num);
-        div.addEventListener('click',()=>{if(selected.has(i-1)){selected.delete(i-1);div.classList.remove('selected')}else{selected.add(i-1);div.classList.add('selected')};updateCount()});
+        const idx=i-1;
+        div.addEventListener('click',e=>{
+            if(e.target.closest('.page-thumb-btn'))return;
+            if(selected.has(idx)){selected.delete(idx);div.classList.remove('selected')}
+            else{selected.add(idx);div.classList.add('selected')}
+            updateCount();
+        });
+        const naturalRot=page.getViewport({scale:1}).rotation||0;
+        div.querySelector('[data-act="rotate"]').addEventListener('click',async e=>{
+            e.stopPropagation();
+            const cur=rotations.get(idx)||0;
+            const next=(cur+90)%360;
+            rotations.set(idx,next);
+            const newVp=page.getViewport({scale:thumbScale*thumbDpr,rotation:(naturalRot+next)%360});
+            canvas.width=newVp.width;canvas.height=newVp.height;
+            await page.render({canvasContext:canvas.getContext('2d'),viewport:newVp}).promise;
+        });
         grid.appendChild(div);thumbs.push(div);
     }
     function updateCount(){const c=selected.size;if(opts.onCount)opts.onCount(c,total)}
@@ -153,7 +290,9 @@ async function renderPageGrid(arrayBuffer,containerId,opts={}){
     ctrl.querySelector('[data-act="all"]').onclick=()=>setAll(true);
     ctrl.querySelector('[data-act="none"]').onclick=()=>setAll(false);
     ctrl.querySelector('[data-act="apply"]').onclick=()=>{const v=ctrl.querySelector('[data-act="range"]').value;if(!v.trim())return;setAll(false);parseRange(v,total).forEach(i=>{selected.add(i);thumbs[i].classList.add('selected')});updateCount()};
-    return()=>Array.from(selected).sort((a,b)=>a-b);
+    const getSel=()=>Array.from(selected).sort((a,b)=>a-b);
+    getSel.getRotations=()=>rotations;
+    return getSel;
 }
 
 // ===== 1. PDF 편집 (합치기+나누기+삭제+추출+회전 통합) =====
@@ -236,12 +375,17 @@ async function handleEditFiles(files){
     const willAdd=files.some(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
     if(willAdd&&editPages.length)pushHistory();
     for(const f of files.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'))){
-        let pdf=null;
+        let pdf=null;let pgPassword=null;
         try{
             const rawBuf=await f.arrayBuffer();const ab=rawBuf.slice(0);
-            pdf=await pdfjsLib.getDocument({data:ab.slice(0)}).promise;
-            const fname=f.name.replace(/\.pdf$/i,'');
-            if(!editSourceNames.includes(fname)){editSourceNames.push(fname);editSourceFiles.push({name:f.name,size:f.size,pageCount:pdf.numPages})}
+            const unlocked=await unlockPdf(ab,f.name);
+            pdf=unlocked.doc;pgPassword=unlocked.password;
+            // 같은 이름이 이미 있으면 (2), (3) ... suffix로 구분 — 사이드바에 별개 항목으로 노출
+            const baseFname=f.name.replace(/\.pdf$/i,'');
+            let fname=baseFname;let n=2;
+            while(editSourceNames.includes(fname))fname=`${baseFname} (${n++})`;
+            editSourceNames.push(fname);
+            editSourceFiles.push({name:fname+'.pdf',size:f.size,pageCount:pdf.numPages});
             for(let i=0;i<pdf.numPages;i++){
                 if(editCancelled.has(fname))break;
                 const page=await pdf.getPage(i+1);
@@ -253,10 +397,13 @@ async function handleEditFiles(files){
                 const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
                 await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
                 if(editCancelled.has(fname))break;
-                editPages.push({arrayBuffer:ab,sourceFile:fname,sourcePageIndex:i,selected:true,thumbCanvas:canvas,rotation:0,naturalRotation,textBoxes:[],imageBoxes:[],pageW:baseVp.width,pageH:baseVp.height,thumbDpr});
+                editPages.push({arrayBuffer:ab,password:pgPassword,sourceFile:fname,sourcePageIndex:i,selected:true,thumbCanvas:canvas,rotation:0,naturalRotation,textBoxes:[],imageBoxes:[],pageW:baseVp.width,pageH:baseVp.height,thumbDpr});
             }
             editCancelled.delete(fname);
-        }catch(e){showError(errEl,T.errFileRead(f.name))}
+        }catch(e){
+            if(e&&(e.skipped||e.passwordFail))showError(errEl,(e.message||'')+': '+f.name);
+            else showError(errEl,T.errFileRead(f.name));
+        }
         finally{if(pdf)try{await pdf.destroy()}catch(_){}}
     }
     if(editPages.length){
@@ -303,12 +450,20 @@ function renderEditFileList(){
 const THUMB_SCALE=0.85;
 
 let _markImgEl=null;
+function _disposeMarkImgEl(){
+    if(_markImgEl&&_markImgEl._objUrl){
+        try{URL.revokeObjectURL(_markImgEl._objUrl)}catch(_){}
+        _markImgEl._objUrl=null;
+    }
+    _markImgEl=null;
+}
 async function getMarkImgElement(){
-    if(!editMarkImgData){_markImgEl=null;return null}
+    if(!editMarkImgData){_disposeMarkImgEl();return null}
     if(_markImgEl&&_markImgEl._fromBuf===editMarkImgData.arrayBuffer)return _markImgEl;
-    const img=new Image();
-    img.src=URL.createObjectURL(new Blob([editMarkImgData.arrayBuffer],{type:editMarkImgData.type}));
-    await new Promise((res,rej)=>{img.onload=res;img.onerror=rej});
+    _disposeMarkImgEl(); // 새 이미지 들어오면 옛 blob URL 회수
+    const url=URL.createObjectURL(new Blob([editMarkImgData.arrayBuffer],{type:editMarkImgData.type}));
+    const img=new Image();img._objUrl=url;img.src=url;
+    await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error('image load failed'))});
     img._fromBuf=editMarkImgData.arrayBuffer;
     _markImgEl=img;return img;
 }
@@ -477,26 +632,28 @@ function renderThumbCanvas(pg,opts,pageIndex){
 const MODAL_SCALE=1.5;
 
 // 모달 편집 툴바 DOM (순수 빌더 — 클로저 의존 없음)
-function buildModalTextToolbar(addModeActive){
+function buildModalTextToolbar(){
     const toolbar=document.createElement('div');toolbar.className='modal-text-toolbar';
     const colorOpts=T.modalColorOptions.map(o=>`<option value="${o.v}" data-swatch="${o.v}">${o.t}</option>`).join('');
     const bgOpts=T.modalBgOptions.map(o=>`<option value="${o.v}">${o.t}</option>`).join('');
     toolbar.innerHTML=`
-        <button class="modal-tb-add-btn" data-act="toggle-add">${addModeActive?T.modalAddTextActive:T.modalAddText}</button>
         <button class="modal-tb-add-btn" data-act="add-image">${T.modalAddImage}</button>
         <span class="modal-tb-divider modal-tb-format-grp"></span>
         <input class="modal-tb-num modal-tb-format-grp" type="number" min="6" max="96" step="1" data-field="size" title="${T.modalSizeLabel}">
-        <select class="modal-tb-select modal-tb-format-grp" data-field="color" title="${T.modalColorLabel}">${colorOpts}</select>
+        <span class="modal-tb-label modal-tb-format-grp modal-tb-label-text">${T.modalColorLabel}</span>
+        <select class="modal-tb-select modal-tb-format-grp" data-field="color" aria-label="${T.modalColorLabel}">${colorOpts}</select>
         <input class="modal-tb-color-picker modal-tb-format-grp" type="color" data-field="colorpicker" title="${T.modalColorPickerTitle}" value="#222222">
+        <span class="modal-tb-divider modal-tb-format-grp"></span>
+        <span class="modal-tb-label modal-tb-format-grp modal-tb-label-bg">${T.modalBgLabel}</span>
+        <select class="modal-tb-select modal-tb-format-grp" data-field="bg" aria-label="${T.modalBgLabel}">${bgOpts}</select>
+        <input class="modal-tb-color-picker modal-tb-format-grp" type="color" data-field="bgpicker" title="${T.modalBgPickerTitle}" value="#ffffff">
+        <span class="modal-tb-divider modal-tb-format-grp"></span>
         <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="bold" title="${T.modalBoldTitle}"><b>B</b></button>
         <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="underline" title="${T.modalUnderlineTitle}"><span style="text-decoration:underline">U</span></button>
         <span class="modal-tb-divider modal-tb-format-grp"></span>
         <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="align" data-val="left" title="${T.modalAlignLeftTitle}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="10" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg></button>
         <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="align" data-val="center" title="${T.modalAlignCenterTitle}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="8" x2="12" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg></button>
         <button class="modal-tb-icon-btn modal-tb-format-grp" data-field="align" data-val="right" title="${T.modalAlignRightTitle}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg></button>
-        <span class="modal-tb-divider modal-tb-format-grp"></span>
-        <select class="modal-tb-select modal-tb-format-grp" data-field="bg" title="${T.modalBgLabel}">${bgOpts}</select>
-        <input class="modal-tb-color-picker modal-tb-format-grp" type="color" data-field="bgpicker" title="${T.modalBgPickerTitle}" value="#ffffff">
         <span class="modal-tb-divider modal-tb-boxalign-grp" style="display:none"></span>
         <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="left" title="${T.boxAlignLeftTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="2" x2="2" y2="14"/><rect x="4" y="4" width="8" height="3"/><rect x="4" y="9" width="5" height="3"/></svg></button>
         <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="centerH" title="${T.boxAlignCenterHTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14" stroke-dasharray="2 1.5"/><rect x="4" y="4" width="8" height="3"/><rect x="5.5" y="9" width="5" height="3"/></svg></button>
@@ -504,16 +661,17 @@ function buildModalTextToolbar(addModeActive){
         <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="top" title="${T.boxAlignTopTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="2" x2="14" y2="2"/><rect x="4" y="4" width="3" height="8"/><rect x="9" y="4" width="3" height="5"/></svg></button>
         <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="centerV" title="${T.boxAlignCenterVTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8" stroke-dasharray="2 1.5"/><rect x="4" y="4" width="3" height="8"/><rect x="9" y="5.5" width="3" height="5"/></svg></button>
         <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="bottom" title="${T.boxAlignBottomTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="14" x2="14" y2="14"/><rect x="4" y="4" width="3" height="8"/><rect x="9" y="7" width="3" height="5"/></svg></button>
-        <span class="modal-tb-hint"></span>
     `;
     return toolbar;
 }
 
 async function openPageEditor(pg){
+    // 모달 진입 시 호출자(active 버튼) 저장 → 닫을 때 focus 복귀 (접근성)
+    const _lastFocus=document.activeElement;
     // ===== 1. PDF 페이지 렌더 (캔버스에 stamp 합성) =====
     const opts=getStampOptionsLive();
     if(opts.markImgOn){opts.markImgEl=await getMarkImgElement().catch(()=>null)}
-    const pdf=await pdfjsLib.getDocument({data:pg.arrayBuffer.slice(0)}).promise;
+    const pdf=await getPdfDoc(pg.arrayBuffer.slice(0),pg.password);
     const page=await pdf.getPage(pg.sourcePageIndex+1);
     // PDF 자체 회전(메타데이터) + 사용자 회전 모두 합쳐 적용
     const rot=((pg.naturalRotation||0)+pg.rotation)%360;
@@ -539,8 +697,13 @@ async function openPageEditor(pg){
     const overlay=document.createElement('div');overlay.className='page-preview-overlay';
     const closeBtn=document.createElement('span');closeBtn.className='page-preview-close';closeBtn.innerHTML='&times;';
     overlay.appendChild(closeBtn);
-    const toolbar=buildModalTextToolbar(_textOpts.addMode);
+    const toolbar=buildModalTextToolbar();
     overlay.appendChild(toolbar);
+    function showModalToast(msg){
+        const t=document.createElement('div');t.className='modal-toast';t.textContent=msg;
+        overlay.appendChild(t);
+        setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),200)},1800);
+    }
 
     // ===== 3. 박스 선택/포커스 상태 =====
     // 현재 포커스된 박스 추적 (또는 null이면 _textOpts에 적용)
@@ -565,6 +728,11 @@ async function openPageEditor(pg){
         tbBold.classList.toggle('active',!!o.bold);
         tbUnderline.classList.toggle('active',!!o.underline);
         tbAlignBtns.forEach(b=>b.classList.toggle('active',b.dataset.val===(o.align||'left')));
+        // 라벨의 아이콘 색을 현재 색 반영 (A 밑줄=글자색, 사각형=배경색)
+        const tlbl=toolbar.querySelector('.modal-tb-label-text');
+        const blbl=toolbar.querySelector('.modal-tb-label-bg');
+        if(tlbl)tlbl.style.setProperty('--c',o.color||'#fff');
+        if(blbl)blbl.style.setProperty('--c',o.bg||'transparent');
     }
     function getActiveTargets(){
         // 다중 선택이 있으면 그 셋, 없으면 _focusedBox 단일, 없으면 _textOpts
@@ -666,18 +834,13 @@ async function openPageEditor(pg){
     overlay.appendChild(wrap);
     const note=document.createElement('div');note.className='modal-preview-note';note.textContent=T.modalPreviewNote;
     overlay.appendChild(note);
+    const clickHint=document.createElement('div');clickHint.className='modal-click-hint';clickHint.textContent=T.modalClickHint;
+    overlay.appendChild(clickHint);
 
-    // 툴바 인터랙션
-    const addBtn=toolbar.querySelector('[data-act="toggle-add"]');
-    const hintEl=toolbar.querySelector('.modal-tb-hint');
-    function refreshAddBtn(){
-        addBtn.textContent=_textOpts.addMode?T.modalAddTextActive:T.modalAddText;
-        addBtn.classList.toggle('active',_textOpts.addMode);
-        hintEl.textContent=_textOpts.addMode?T.modalTextHint:'';
-        bigCanvas.style.cursor=_textOpts.addMode?'text':'default';
-        refreshFormatVisibility();
-    }
-    addBtn.addEventListener('click',e=>{e.stopPropagation();_textOpts.addMode=!_textOpts.addMode;refreshAddBtn()});
+    // 모달 진입 = 텍스트 추가 모드 항상 ON. 캔버스 클릭 = 박스 즉시 추가, text 커서.
+    _textOpts.addMode=true;
+    bigCanvas.style.cursor='text';
+    function refreshAddBtn(){refreshFormatVisibility()}
     const addImageBtn=toolbar.querySelector('[data-act="add-image"]');
     addImageBtn.addEventListener('click',e=>{
         e.stopPropagation();
@@ -685,6 +848,7 @@ async function openPageEditor(pg){
         fi.type='file';fi.accept='image/png,image/jpeg';
         fi.addEventListener('change',ev=>{
             const f=ev.target.files[0];if(!f)return;
+            if(tooLarge(f)){const errEl=document.getElementById('editError');if(errEl)showError(errEl,T.errFileTooLarge(f.name,formatSize(SIZE_MAX)));return}
             const reader=new FileReader();
             reader.onload=()=>{
                 const img=new Image();
@@ -700,8 +864,10 @@ async function openPageEditor(pg){
                     imageLayer.appendChild(makeImageBoxEl(ibox));
                     scheduleThumbRedraw();
                 };
+                img.onerror=()=>{const errEl=document.getElementById('editError');if(errEl)showError(errEl,T.errFileRead(f.name))};
                 img.src=reader.result;
             };
+            reader.onerror=()=>{const errEl=document.getElementById('editError');if(errEl)showError(errEl,T.errFileRead(f.name))};
             reader.readAsDataURL(f);
         });
         fi.click();
@@ -916,7 +1082,23 @@ async function openPageEditor(pg){
         });
         content.addEventListener('keydown',e=>{
             if(e.key==='Escape'){e.preventDefault();content.blur();return}
-            // Ctrl/Cmd + D → 박스 복제 (오프셋 위치)
+            // Ctrl/Cmd + Shift + D → 같은 좌표/스타일로 다른 선택 페이지에 일괄 복제
+            if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(e.key==='d'||e.key==='D')){
+                e.preventDefault();
+                box.text=content.textContent; // 현재 텍스트 sync
+                const targets=editPages.filter(p=>p.selected&&p!==pg);
+                if(targets.length){
+                    pushHistory();
+                    targets.forEach(t=>{
+                        if(!t.textBoxes)t.textBoxes=[];
+                        t.textBoxes.push({id:genBoxId(),text:box.text,x:box.x,y:box.y,size:box.size,color:box.color,bold:box.bold,underline:box.underline,align:box.align,bg:box.bg});
+                    });
+                    showModalToast(T.boxCopiedToPages(targets.length));
+                    scheduleThumbRedraw();
+                }
+                return;
+            }
+            // Ctrl/Cmd + D → 박스 복제 (오프셋 위치, 같은 페이지)
             if((e.ctrlKey||e.metaKey)&&(e.key==='d'||e.key==='D')){
                 e.preventDefault();
                 pushHistory();
@@ -943,16 +1125,8 @@ async function openPageEditor(pg){
     }
     pg.textBoxes.forEach(b=>textLayer.appendChild(makeBoxEl(b)));
 
-    // ===== 7. 캔버스 클릭 → 텍스트 박스 추가 (addMode) / 박스 선택 해제 =====
+    // ===== 7. 캔버스 클릭 → 텍스트 박스 즉시 추가 =====
     bigCanvas.addEventListener('click',e=>{
-        if(!_textOpts.addMode){
-            // addMode 아닐 때: 빈 영역 클릭 = 박스 선택 해제
-            _focusedBox=null;
-            clearMultiSel();
-            syncToolbarFromOpts(_textOpts);
-            refreshFormatVisibility();
-            return;
-        }
         const rect=bigCanvas.getBoundingClientRect();
         const cx=(e.clientX-rect.left)/MODAL_SCALE;
         const cy=(e.clientY-rect.top)/MODAL_SCALE;
@@ -992,6 +1166,8 @@ async function openPageEditor(pg){
         overlay.remove();
         document.removeEventListener('keydown',onKey);
         scheduleThumbRedraw();
+        // 호출자(thumb의 ⤢ 버튼 등) 로 focus 복귀
+        try{if(_lastFocus&&_lastFocus.focus&&document.contains(_lastFocus))_lastFocus.focus()}catch(_){}
     }
     // 페이지 네비게이션 (좌우 화살표)
     const curIdx=editPages.indexOf(pg);
@@ -1033,8 +1209,20 @@ async function openPageEditor(pg){
     }
     closeBtn.addEventListener('click',close);
     overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+    // Focus trap — Tab/Shift+Tab 이 overlay 내에서 순환
+    overlay.addEventListener('keydown',e=>{
+        if(e.key!=='Tab')return;
+        const f=overlay.querySelectorAll('button:not([disabled]),[contenteditable="true"],input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])');
+        if(!f.length)return;
+        const first=f[0],last=f[f.length-1];
+        if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+        else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+    });
     document.addEventListener('keydown',onKey);
     document.body.appendChild(overlay);
+    // 모달 진입 즉시 첫 인터랙티브 요소(닫기 버튼)에 focus
+    closeBtn.tabIndex=0;
+    setTimeout(()=>closeBtn.focus(),0);
 }
 
 let _redrawTimer=null;
@@ -1130,7 +1318,7 @@ function renderEditGrid(){
         });
         function togglePageSel(){pushHistory();pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';div.setAttribute('aria-checked',pg.selected?'true':'false');updateEditStatus();scheduleThumbRedraw()}
         div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate')||e.target.closest('.page-thumb-btn'))return;togglePageSel()});
-        div.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();togglePageSel()}});
+        div.addEventListener('keydown',e=>{if((e.key===' '||e.key==='Enter')&&e.target===div){e.preventDefault();togglePageSel()}});
         div.addEventListener('dragstart',e=>{editDragIdx=i;div.classList.add('dragging-thumb');e.dataTransfer.effectAllowed='move'});
         div.addEventListener('dragend',()=>{div.classList.remove('dragging-thumb');grid.querySelectorAll('.drag-over-thumb').forEach(el=>el.classList.remove('drag-over-thumb'));editDragIdx=null});
         div.addEventListener('dragover',e=>{e.preventDefault();if(editDragIdx!==null&&editDragIdx!==i)div.classList.add('drag-over-thumb')});
@@ -1168,6 +1356,39 @@ function updateEditStatus(){
     else if(sel<total)btn.textContent=T.btnExtractSave(sel);
     else btn.textContent=T.btnSavePages(sel);
 }
+
+document.getElementById('editTbRotateAll').addEventListener('click',()=>{
+    if(!editPages.length)return;
+    const hasBoxes=editPages.some(p=>(p.textBoxes&&p.textBoxes.length)||(p.imageBoxes&&p.imageBoxes.length));
+    if(hasBoxes){
+        if(!confirm(T.rotateAllConfirm))return;
+    }
+    pushHistory();
+    editPages.forEach(pg=>{
+        // 텍스트/이미지 박스 변환식은 기존 회전 핸들러와 동일
+        const rotBefore=pg.rotation%360;
+        const swapped=rotBefore===90||rotBefore===270;
+        const oldW=swapped?pg.pageH:pg.pageW;
+        const oldH=swapped?pg.pageW:pg.pageH;
+        if(pg.textBoxes&&pg.textBoxes.length){
+            pg.textBoxes.forEach(b=>{
+                const approxH=b.size*1.2;
+                const nx=oldH-b.y-approxH;const ny=b.x;
+                b.x=Math.max(0,nx);b.y=Math.max(0,ny);
+            });
+        }
+        if(pg.imageBoxes&&pg.imageBoxes.length){
+            pg.imageBoxes.forEach(b=>{
+                const nx=oldH-b.y-b.h;const ny=b.x;
+                b.x=Math.max(0,nx);b.y=Math.max(0,ny);
+                const tmp=b.w;b.w=b.h;b.h=tmp;
+                if(b.naturalW&&b.naturalH){const t=b.naturalW;b.naturalW=b.naturalH;b.naturalH=t}
+            });
+        }
+        pg.rotation=(pg.rotation+90)%360;
+    });
+    renderEditGrid();
+});
 
 document.getElementById('editSelectToggle').addEventListener('click',()=>{
     pushHistory();
@@ -1410,14 +1631,30 @@ setupDropZone('textDropZone','textFileInput',async files=>{
     document.getElementById('textDropZone').style.display='none';
     const pb=document.getElementById('textProgress'),pf=document.getElementById('textProgressFill');pb.classList.add('active');pf.style.width='0%';
     document.getElementById('textStatus').textContent=T.textExtracting;
-    try{const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let txt='';
+    let pdf=null;
+    try{
+        pdf=await getPdfDocSafe(await f.arrayBuffer(),f.name);
+        let txt='';
         for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i);const c=await pg.getTextContent();const t=c.items.map(x=>x.str).join(' ');if(t.trim())txt+=`${T.textPageHeader(i)}\n${t.trim()}\n\n`;pf.style.width=(i/pdf.numPages*100)+'%'}
         if(!txt.trim()){document.getElementById('textStatus').textContent=T.textNotFound;document.getElementById('textDropZone').style.display=''}
         else{document.getElementById('extractedText').value=txt.trim();document.getElementById('textResult').classList.add('active');showComplete(document.getElementById('textStatus'),T.textExtracted(pdf.numPages))}
     }catch(e){document.getElementById('textStatus').textContent=T.errPrefix+e.message;document.getElementById('textDropZone').style.display=''}
-    finally{setTimeout(()=>pb.classList.remove('active'),500)}
+    finally{
+        if(pdf)try{await pdf.destroy()}catch(_){}
+        setTimeout(()=>pb.classList.remove('active'),500);
+    }
 });
-document.getElementById('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(document.getElementById('extractedText').value)}catch{document.getElementById('extractedText').select();document.execCommand('copy')}document.getElementById('copyBtn').textContent=T.copyDone;setTimeout(()=>document.getElementById('copyBtn').textContent=T.copy,1500)});
+document.getElementById('copyBtn').addEventListener('click',async()=>{
+    const txt=document.getElementById('extractedText');
+    let ok=false;
+    try{await navigator.clipboard.writeText(txt.value);ok=true}
+    catch{
+        try{txt.select();ok=document.execCommand('copy')}catch{}
+    }
+    const btn=document.getElementById('copyBtn');
+    btn.textContent=ok?T.copyDone:T.errPrefix+T.copy;
+    setTimeout(()=>btn.textContent=T.copy,1500);
+});
 document.getElementById('downloadTxtBtn').addEventListener('click',()=>{download(new Blob([document.getElementById('extractedText').value],{type:'text/plain;charset=utf-8'}),textFileName+'.txt')});
 
 
@@ -1436,15 +1673,20 @@ function resetConvert(){resetTool('convert');setConvertMode('img2pdf')}
 let imgFiles=[];
 setupDropZone('img2pdfDropZone','img2pdfFileInput',files=>{
     files.filter(f=>f.type.startsWith('image/')).forEach(f=>{
-        const reader=new FileReader();reader.onload=()=>{imgFiles.push({name:f.name,data:reader.result,file:f});renderImgPreview()};reader.readAsDataURL(f);
+        const reader=new FileReader();
+        reader.onload=()=>{imgFiles.push({name:f.name,data:reader.result,file:f,rotation:0});renderImgPreview()};
+        reader.onerror=()=>{const errEl=document.getElementById('img2pdfError');if(errEl)showError(errEl,T.errFileRead(f.name))};
+        reader.readAsDataURL(f);
     });
 },{accept:'image/*'});
 function renderImgPreview(){
     const c=document.getElementById('img2pdfPreview');c.innerHTML='';
     imgFiles.forEach((f,i)=>{
         const div=document.createElement('div');div.className='img-preview-item';
-        div.innerHTML=`<img src="${f.data}"><button class="img-preview-remove">&times;</button><div class="img-preview-reorder"><button data-dir="-1">◀</button><button data-dir="1">▶</button></div>`;
+        const rot=f.rotation||0;
+        div.innerHTML=`<img src="${f.data}" style="transform:rotate(${rot}deg)"><button class="img-preview-rotate" type="button" title="${T.rotateTitle}" aria-label="${T.rotateTitle}">↻</button><button class="img-preview-remove" type="button">&times;</button><div class="img-preview-reorder"><button data-dir="-1" type="button">◀</button><button data-dir="1" type="button">▶</button></div>`;
         div.querySelector('.img-preview-remove').addEventListener('click',()=>{imgFiles.splice(i,1);renderImgPreview()});
+        div.querySelector('.img-preview-rotate').addEventListener('click',()=>{f.rotation=((f.rotation||0)+90)%360;renderImgPreview()});
         div.querySelectorAll('.img-preview-reorder button').forEach(btn=>btn.addEventListener('click',()=>{
             const d=parseInt(btn.dataset.dir);const ni=i+d;if(ni<0||ni>=imgFiles.length)return;[imgFiles[i],imgFiles[ni]]=[imgFiles[ni],imgFiles[i]];renderImgPreview();
         }));
@@ -1454,46 +1696,106 @@ function renderImgPreview(){
     document.getElementById('img2pdfSizeGroup').style.display=imgFiles.length?'block':'none';
     document.getElementById('img2pdfStatus').textContent=imgFiles.length?T.imgCount(imgFiles.length):'';
 }
-document.getElementById('img2pdfBtn').addEventListener('click',async()=>{
-    if(!imgFiles.length)return;const pageSize=document.getElementById('img2pdfPageSize').value;
+// canvas로 이미지를 회전한 후 PNG bytes로 반환
+async function rotateImageToBytes(file,rotation){
+    const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(file)});
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('image load failed'));i.src=dataUrl});
+    const swap=rotation===90||rotation===270;
+    const c=document.createElement('canvas');
+    c.width=swap?img.naturalHeight:img.naturalWidth;
+    c.height=swap?img.naturalWidth:img.naturalHeight;
+    const ctx=c.getContext('2d');
+    ctx.translate(c.width/2,c.height/2);
+    ctx.rotate(rotation*Math.PI/180);
+    ctx.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);
+    const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+    return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function convertImg2Pdf(){
+    if(!imgFiles.length)return;
+    const pageSize=document.getElementById('img2pdfPageSize').value;
     const A4W=595.28,A4H=841.89;
-    const doc=await PDFLib.PDFDocument.create();
-    for(const img of imgFiles){
-        const ab=await img.file.arrayBuffer();
-        let embedded;if(img.file.type==='image/png')embedded=await doc.embedPng(ab);else embedded=await doc.embedJpg(ab);
-        if(pageSize==='a4fit'){
-            const page=doc.addPage([A4W,A4H]);const scale=Math.min(A4W/embedded.width,A4H/embedded.height);
-            const w=embedded.width*scale,h=embedded.height*scale;page.drawImage(embedded,{x:(A4W-w)/2,y:(A4H-h)/2,width:w,height:h});
-        }else{const page=doc.addPage([embedded.width,embedded.height]);page.drawImage(embedded,{x:0,y:0,width:embedded.width,height:embedded.height})}
+    const errEl=document.getElementById('img2pdfError');
+    try{
+        const doc=await PDFLib.PDFDocument.create();
+        for(const img of imgFiles){
+            let embedded;
+            const rot=img.rotation||0;
+            if(rot){
+                // 회전된 PNG 만들어 임베드
+                const pngBytes=await rotateImageToBytes(img.file,rot);
+                embedded=await doc.embedPng(pngBytes);
+            }else{
+                const ab=await img.file.arrayBuffer();
+                if(img.file.type==='image/png')embedded=await doc.embedPng(ab);
+                else embedded=await doc.embedJpg(ab);
+            }
+            if(pageSize==='a4fit'){
+                const page=doc.addPage([A4W,A4H]);const scale=Math.min(A4W/embedded.width,A4H/embedded.height);
+                const w=embedded.width*scale,h=embedded.height*scale;page.drawImage(embedded,{x:(A4W-w)/2,y:(A4H-h)/2,width:w,height:h});
+            }else{const page=doc.addPage([embedded.width,embedded.height]);page.drawImage(embedded,{x:0,y:0,width:embedded.width,height:embedded.height})}
+        }
+        download(new Blob([await doc.save()],{type:'application/pdf'}),'images.pdf');
+        showComplete(document.getElementById('img2pdfStatus'),T.done);
+    }catch(e){
+        if(errEl)showError(errEl,T.errPrefix+(e.message||e));
+        document.getElementById('img2pdfStatus').textContent='';
     }
-    download(new Blob([await doc.save()],{type:'application/pdf'}),'images.pdf');
-    showComplete(document.getElementById('img2pdfStatus'),T.done);
-});
+}
+document.getElementById('img2pdfBtn').addEventListener('click',convertImg2Pdf);
 
 // ===== 4b. PDF→이미지 =====
 let pdf2imgData=null,pdf2imgGetSel=null;
 setupDropZone('pdf2imgDropZone','pdf2imgFileInput',async files=>{
     const f=files[0];if(!f)return;checkLargeFiles(files,document.getElementById('view-pdf2img'));
-    pdf2imgData={arrayBuffer:await f.arrayBuffer(),name:f.name.replace(/\.pdf$/i,'')};
-    document.getElementById('pdf2imgDropZone').style.display='none';document.getElementById('pdf2imgOptions').style.display='block';
-    pdf2imgGetSel=await renderPageGrid(pdf2imgData.arrayBuffer,'pdf2imgPageContainer',{onCount:(c,t)=>{document.getElementById('pdf2imgStatus').textContent=c?T.pagesSelected(c):T.totalPagesAll(t)}});
-});
-document.getElementById('pdf2imgBtn').addEventListener('click',async()=>{
-    if(!pdf2imgData)return;const fmt=document.getElementById('pdf2imgFormat').value;const scale=parseInt(document.getElementById('pdf2imgScale').value);
-    let sel=pdf2imgGetSel();const pdf=await pdfjsLib.getDocument({data:pdf2imgData.arrayBuffer}).promise;
-    if(!sel.length)sel=Array.from({length:pdf.numPages},(_,i)=>i);
-    const pb=document.getElementById('pdf2imgProgress'),pf=document.getElementById('pdf2imgProgressFill');pb.classList.add('active');pf.style.width='0%';
-    for(let idx=0;idx<sel.length;idx++){
-        const page=await pdf.getPage(sel[idx]+1);const vp=page.getViewport({scale});
-        const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
-        await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
-        const blob=await new Promise(r=>canvas.toBlob(r,`image/${fmt}`,0.95));
-        download(blob,`${pdf2imgData.name}_${sel[idx]+1}.${fmt==='jpeg'?'jpg':'png'}`);
-        pf.style.width=((idx+1)/sel.length*100)+'%';
+    const errEl=document.getElementById('pdf2imgError');
+    try{
+        const ab=await f.arrayBuffer();
+        const{password}=await unlockPdf(ab,f.name);
+        pdf2imgData={arrayBuffer:ab,name:f.name.replace(/\.pdf$/i,''),password};
+        document.getElementById('pdf2imgDropZone').style.display='none';document.getElementById('pdf2imgOptions').style.display='block';
+        pdf2imgGetSel=await renderPageGrid(pdf2imgData.arrayBuffer,'pdf2imgPageContainer',{password,onCount:(c,t)=>{document.getElementById('pdf2imgStatus').textContent=c?T.pagesSelected(c):T.totalPagesAll(t)}});
+    }catch(e){
+        if(e&&(e.skipped||e.passwordFail))showError(errEl,(e.message||'')+': '+f.name);
+        else showError(errEl,T.errFileRead(f.name));
     }
-    showComplete(document.getElementById('pdf2imgStatus'),T.imagesDownloaded(sel.length));
-    setTimeout(()=>pb.classList.remove('active'),1000);
 });
+async function convertPdf2Img(){
+    if(!pdf2imgData)return;
+    const fmt=document.getElementById('pdf2imgFormat').value;const scale=parseInt(document.getElementById('pdf2imgScale').value);
+    const pb=document.getElementById('pdf2imgProgress'),pf=document.getElementById('pdf2imgProgressFill');
+    const errEl=document.getElementById('pdf2imgError');
+    let pdf=null;
+    const rotations=(pdf2imgGetSel&&pdf2imgGetSel.getRotations)?pdf2imgGetSel.getRotations():new Map();
+    try{
+        let sel=pdf2imgGetSel?pdf2imgGetSel():[];
+        pdf=await getPdfDoc(pdf2imgData.arrayBuffer.slice(0),pdf2imgData.password);
+        if(!sel.length)sel=Array.from({length:pdf.numPages},(_,i)=>i);
+        pb.classList.add('active');pf.style.width='0%';
+        for(let idx=0;idx<sel.length;idx++){
+            const pageIdx=sel[idx];
+            const page=await pdf.getPage(pageIdx+1);
+            const userRot=rotations.get(pageIdx)||0;
+            const naturalRot=page.getViewport({scale:1}).rotation||0;
+            const totalRot=(naturalRot+userRot)%360;
+            const vp=page.getViewport({scale,rotation:totalRot});
+            const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
+            await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+            const blob=await new Promise(r=>canvas.toBlob(r,`image/${fmt}`,0.95));
+            download(blob,`${pdf2imgData.name}_${pageIdx+1}.${fmt==='jpeg'?'jpg':'png'}`);
+            pf.style.width=((idx+1)/sel.length*100)+'%';
+        }
+        showComplete(document.getElementById('pdf2imgStatus'),T.imagesDownloaded(sel.length));
+    }catch(e){
+        if(errEl)showError(errEl,T.errPrefix+(e.message||e));
+        document.getElementById('pdf2imgStatus').textContent='';
+    }finally{
+        if(pdf)try{await pdf.destroy()}catch(_){}
+        setTimeout(()=>pb.classList.remove('active'),1000);
+    }
+}
+document.getElementById('pdf2imgBtn').addEventListener('click',convertPdf2Img);
 
 // ===== Reset Tool =====
 function resetTool(id){

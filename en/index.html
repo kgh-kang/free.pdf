@@ -6,7 +6,7 @@
     <title>free.pdf — Edit · Convert · Watermark</title>
     <link rel="alternate" hreflang="ko" href="../">
     <link rel="alternate" hreflang="en" href="./">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; form-action 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com https://cdnjs.cloudflare.com https://gc.zgo.at; worker-src blob:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; form-action 'none';">
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js" integrity="sha384-2p6U+1mmqF10USehFeRiyG2ESG9FwIqN+jxULn5w9jjQIihSn9Pt13dVCn/Hawjn" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
@@ -18,27 +18,36 @@
     <div class="container">
         <div class="top-bar">
             <div class="top-bar-left">
-                <a class="logo" onclick="showHome()">free.pdf</a>
+                <a class="logo" data-action="home">free.pdf</a>
                 <span class="breadcrumb" id="breadcrumb" style="display:none">›</span>
                 <span class="breadcrumb-name" id="breadcrumbName" style="display:none"></span>
             </div>
             <a class="lang-btn" href="../">한국어</a>
         </div>
         <header>
-            <h1 onclick="showHome()">Simple PDF tools<br>safely in your browser</h1>
+            <h1 data-action="home">Simple PDF tools<br>safely in your browser</h1>
             <p>Everything runs locally in your browser. Files never leave your device.</p>
         </header>
 
 <!-- HOME -->
-<div class="view active" id="view-home"><div class="tool-grid">
-    <button type="button" class="tool-card" onclick="showTool('edit')" aria-label="PDF Edit — merge, extract, delete, rotate"><span class="tool-card-kicker">EDIT</span><span class="tool-card-big">EDIT</span><h3>PDF Edit</h3><span class="tool-card-tags"><span>Merge</span><span>Extract</span><span>Delete</span><span>Rotate</span></span></button>
-    <button type="button" class="tool-card" onclick="showTool('convert')" aria-label="Image convert — images to PDF, PDF to images"><span class="tool-card-kicker">CONVERT</span><span class="tool-card-big">CON<br>VERT</span><h3>Image Convert</h3><span class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></span></button>
-    <button type="button" class="tool-card" onclick="showTool('text')" aria-label="Text extract — copy text or save as TXT"><span class="tool-card-kicker">TEXT</span><span class="tool-card-big">TEXT</span><h3>Text Extract</h3><span class="tool-card-tags"><span>Copy text</span><span>Save TXT</span></span></button>
+<div class="view active" id="view-home">
+<div class="welcome-banner" id="welcomeBanner" role="region" aria-label="Welcome message" hidden>
+    <div class="welcome-icon" aria-hidden="true">👋</div>
+    <div class="welcome-body">
+        <strong class="welcome-title">Welcome to free.pdf</strong>
+        <p class="welcome-text">PDF editing, conversion, and text extraction all run <b>locally in your browser</b>. Files never leave your device. Pick a tool below to get started.</p>
+    </div>
+    <button type="button" class="welcome-close" data-action="welcome-close" aria-label="Dismiss welcome">✕</button>
+</div>
+<div class="tool-grid">
+    <button type="button" class="tool-card" data-action="tool" data-tool="edit" aria-label="PDF Edit — merge, extract, delete, rotate"><span class="tool-card-kicker">EDIT</span><span class="tool-card-big">EDIT</span><h3>PDF Edit</h3><span class="tool-card-tags"><span>Merge</span><span>Extract</span><span>Delete</span><span>Rotate</span></span></button>
+    <button type="button" class="tool-card" data-action="tool" data-tool="convert" aria-label="Image convert — images to PDF, PDF to images"><span class="tool-card-kicker">CONVERT</span><span class="tool-card-big">CON<br>VERT</span><h3>Image Convert</h3><span class="tool-card-tags"><span>IMG → PDF</span><span>PDF → IMG</span></span></button>
+    <button type="button" class="tool-card" data-action="tool" data-tool="text" aria-label="Text extract — copy text or save as TXT"><span class="tool-card-kicker">TEXT</span><span class="tool-card-big">TEXT</span><h3>Text Extract</h3><span class="tool-card-tags"><span>Copy text</span><span>Save TXT</span></span></button>
 </div></div>
 
 <!-- PDF Edit -->
 <div class="view" id="view-edit">
-    <button class="back-btn" onclick="showHome()">← Back</button>
+    <button class="back-btn" data-action="home">← Back</button>
     <div class="tool-title">PDF Edit</div>
     <div class="tool-desc">Select pages, reorder, rotate, then save<br><span class="tool-hint">Click the ⤢ button on each page to add text and images</span></div>
     <div class="drop-zone" id="editDropZone"><div class="drop-zone-icon">EDIT</div><div class="drop-zone-text">Drop a PDF or click to choose</div><div class="drop-zone-sub">Multiple files OK · You can add more later</div></div>
@@ -57,7 +66,8 @@
                     <button class="edit-tb-btn" id="editTbAddFile"><span class="edit-tb-icon">+</span> File</button>
                     <button class="edit-tb-btn" id="editTbPagenum"><span class="edit-tb-icon">#</span> Page numbers <span class="edit-tb-check">✓</span></button>
                     <button class="edit-tb-btn" id="editTbMark"><span class="edit-tb-icon">⊕</span> Watermark <span class="edit-tb-check">✓</span></button>
-                    <button class="edit-tb-btn edit-tb-right" id="editSelectToggle">Deselect all</button>
+                    <button class="edit-tb-btn edit-tb-right" id="editTbRotateAll" title="Rotate all pages 90°"><span class="edit-tb-icon">↻</span> Rotate all</button>
+                    <button class="edit-tb-btn" id="editSelectToggle">Deselect all</button>
                 </div>
                 <div class="edit-stamp-panel" id="editPanelPagenum" style="display:none">
                     <label class="edit-panel-toggle"><input type="checkbox" id="editPagenumEnable"> <span>Apply page numbers</span></label>
@@ -106,7 +116,7 @@
 
 <!-- Text Extract -->
 <div class="view" id="view-text">
-    <button class="back-btn" onclick="showHome()">← Back</button>
+    <button class="back-btn" data-action="home">← Back</button>
     <div class="tool-title">Text Extract</div>
     <div class="tool-desc">Extract text from a PDF</div>
     <div class="drop-zone" id="textDropZone"><div class="drop-zone-icon">TEXT</div><div class="drop-zone-text">Drop a PDF here</div><div class="drop-zone-sub">One file at a time</div></div>
@@ -116,17 +126,25 @@
     <div class="status" id="textStatus"></div>
     <div class="text-result" id="textResult">
         <textarea id="extractedText" readonly></textarea>
-        <div class="text-actions"><button class="btn btn-secondary" onclick="resetTool('text')">Reset</button><button class="btn btn-primary" id="copyBtn">Copy</button><button class="btn btn-primary" id="downloadTxtBtn">Download TXT</button></div>
+        <div class="text-actions"><button class="btn btn-secondary" data-action="reset-tool" data-tool="text">Reset</button><button class="btn btn-primary" id="copyBtn">Copy</button><button class="btn btn-primary" id="downloadTxtBtn">Download TXT</button></div>
     </div>
 </div>
 
 
 <!-- Image Convert -->
 <div class="view" id="view-convert">
-    <button class="back-btn" onclick="showHome()">← Back</button>
+    <button class="back-btn" data-action="home">← Back</button>
     <div class="tool-title">Image Convert</div>
     <div class="form-group" style="margin-bottom:20px">
         <div class="actions" style="margin-bottom:0"><button class="btn btn-primary btn-sm" id="convertModeImg2pdf">Image → PDF</button><button class="btn btn-secondary btn-sm" id="convertModePdf2img">PDF → Image</button></div>
+    </div>
+    <div class="welcome-banner help-tip" id="convertRotateTip" role="region" aria-label="Tool tip" hidden>
+        <div class="welcome-icon" aria-hidden="true">💡</div>
+        <div class="welcome-body">
+            <strong class="welcome-title">Rotation is available</strong>
+            <p class="welcome-text">Hover over any uploaded image/page and a <b>↻ rotate button</b> appears. Rotate by 90° before saving.</p>
+        </div>
+        <button type="button" class="welcome-close" data-action="tip-close" data-tip="convertRotate" aria-label="Dismiss tip">✕</button>
     </div>
     <!-- Image → PDF -->
     <div id="convertImg2pdfView">
@@ -137,7 +155,7 @@
         <div class="form-group" id="img2pdfSizeGroup" style="display:none"><label class="form-label">Page size</label><select class="form-select" id="img2pdfPageSize"><option value="original">Original size</option><option value="a4fit">Fit to A4</option></select></div>
         <div class="img-preview-list" id="img2pdfPreview"></div>
         <div class="status" id="img2pdfStatus"></div>
-        <div class="actions" id="img2pdfActions" style="display:none"><button class="btn btn-secondary" onclick="resetConvert()">Reset</button><button class="btn btn-primary" id="img2pdfBtn">Convert to PDF</button></div>
+        <div class="actions" id="img2pdfActions" style="display:none"><button class="btn btn-secondary" data-action="reset-convert">Reset</button><button class="btn btn-primary" id="img2pdfBtn">Save as PDF</button></div>
     </div>
     <!-- PDF → Image -->
     <div id="convertPdf2imgView" style="display:none">
@@ -153,7 +171,7 @@
             <div id="pdf2imgPageContainer"></div>
             <div class="progress-bar" id="pdf2imgProgress"><div class="progress-bar-fill" id="pdf2imgProgressFill"></div></div>
             <div class="status" id="pdf2imgStatus"></div>
-            <div class="actions"><button class="btn btn-secondary" onclick="resetConvert()">Reset</button><button class="btn btn-primary" id="pdf2imgBtn">Convert to Image</button></div>
+            <div class="actions"><button class="btn btn-secondary" data-action="reset-convert">Reset</button><button class="btn btn-primary" id="pdf2imgBtn">Save as image</button></div>
         </div>
     </div>
 </div>
@@ -161,82 +179,9 @@
         <footer><p>free.pdf · kgh.hyeon@gmail.com</p></footer>
     </div>
 
-<script>
-window.I18N={
-    consoleEncrypted:'[free.pdf] Permission-protected PDF — restrictions bypassed',
-    backToTools:'Back to tools →',
-    toolNames:{edit:'PDF Edit',convert:'Image Convert',text:'Text Extract'},
-    fmtImage:'JPG, PNG',
-    fmtPdf:'PDF',
-    errBadFormat:fmt=>`Unsupported file format. Please use ${fmt} files.`,
-    errFileRead:name=>`Failed to read "${name}"`,
-    errPrefix:'Error: ',
-    largeFileWarn:(name,size)=>`"${name}" is a large file (${size}). Browser processing may take some time.`,
-    selectAll:'Select All',
-    deselectAll:'Deselect All',
-    rangePlaceholder:'Range (e.g. 1-3, 5)',
-    apply:'Apply',
-    fileMeta:(size,count)=>`${size} · ${count} pages`,
-    deleteTitle:'Delete',
-    rotateTitle:'Rotate 90°',
-    previewTitle:'Preview',
-    addBtn:'+ Add',
-    editStatusSelect:'Select pages to save',
-    editStatusAllSelected:'Click pages to deselect',
-    editStatusSome:(sel,total)=>`${sel} of ${total} pages selected`,
-    btnSave:'Save',
-    btnSavePages:sel=>`Save ${sel} pages`,
-    btnMergeSave:sel=>`Merge & save (${sel} ${sel===1?'page':'pages'})`,
-    btnExtractSave:sel=>`Extract & save (${sel} ${sel===1?'page':'pages'})`,
-    btnProcessing:'Processing...',
-    editProgress:(i,total)=>`Processing... (${i}/${total} pages)`,
-    saveComplete:'Saved!',
-    zoomIn:'Zoom In',
-    zoomOut:'Zoom Out',
-    textExtracting:'Extracting...',
-    textPageHeader:i=>`--- Page ${i} ---`,
-    textNotFound:'No text found. This may be an image-only PDF.',
-    textExtracted:n=>`Extracted from ${n} pages`,
-    copy:'Copy',
-    copyDone:'Copied!',
-    editMarkImgZoneInitHtml:'<div class="drop-zone-icon">IMG</div><div class="drop-zone-text">Select an image</div><div class="drop-zone-sub">PNG (transparent background recommended)</div>',
-    editMarkImgSelectedHtml:name=>`<div class="drop-zone-icon">OK</div><div class="drop-zone-text">Image selected</div><div class="drop-zone-sub">${name}</div>`,
-    done:'Done!',
-    imgCount:n=>`${n} images`,
-    pagesSelected:n=>`${n} pages selected`,
-    totalPagesAll:t=>`${t} pages total (all converted if no selection)`,
-    imagesDownloaded:n=>`${n} images downloaded!`,
-    rotateClearsBoxes:'Text boxes on this page will be removed. Continue rotating?',
-    deletePageTitle:'Delete page',
-    fontFallbackWarn:'Korean font failed to load — Korean text may not render correctly. (Use the deployed site or run via a local server)',
-    modalPreviewNote:'This preview is for display only. The saved PDF keeps the original page quality.',
-    modalAddText:'+ Text',
-    modalAddTextActive:'✕ Done',
-    modalTextHint:'Click anywhere on the page to add text',
-    modalAddImage:'+ Image',
-    modalImageDelTitle:'Remove image',
-    modalImageResizeTitle:'Resize',
-    modalSizeLabel:'Size',
-    modalColorLabel:'Color',
-    modalBgLabel:'Background',
-    modalBoldTitle:'Bold',
-    modalUnderlineTitle:'Underline',
-    modalColorPickerTitle:'Custom text color',
-    modalBgPickerTitle:'Custom background color',
-    boxAlignLeftTitle:'Align boxes left',
-    boxAlignCenterHTitle:'Align boxes center horizontally',
-    boxAlignRightTitle:'Align boxes right',
-    boxAlignTopTitle:'Align boxes top',
-    boxAlignCenterVTitle:'Align boxes center vertically',
-    boxAlignBottomTitle:'Align boxes bottom',
-    modalAlignLeftTitle:'Align left',
-    modalAlignCenterTitle:'Align center',
-    modalAlignRightTitle:'Align right',
-    modalSizeOptions:[{v:'10',t:'Small'},{v:'14',t:'Medium'},{v:'20',t:'Large'},{v:'28',t:'X-Large'}],
-    modalColorOptions:[{v:'#222',t:'Black'},{v:'#666',t:'Gray'},{v:'#fff',t:'White'},{v:'#dc2626',t:'Red'},{v:'#2563eb',t:'Blue'},{v:'#16a34a',t:'Green'}],
-    modalBgOptions:[{v:'',t:'None'},{v:'#fef3c7',t:'Yellow'},{v:'#dbeafe',t:'Sky'},{v:'#fecaca',t:'Pink'},{v:'#000',t:'Black'},{v:'#fff',t:'White'}]
-};
-</script>
+<script src="../assets/i18n-en.js"></script>
 <script src="../assets/app.js"></script>
+<script data-goatcounter="https://kgh-kang.goatcounter.com/count"
+        async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
