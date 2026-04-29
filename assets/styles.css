@@ -55,7 +55,7 @@ header .header-sub{font-size:.85rem;color:#7a7a8a;margin-top:16px;letter-spacing
 .edit-add-thumb{border:2px dashed #555;background:repeating-linear-gradient(45deg,rgba(255,255,255,.04),rgba(255,255,255,.04) 8px,rgba(255,255,255,.08) 8px,rgba(255,255,255,.08) 16px);display:flex;align-items:center;justify-content:center;cursor:pointer;min-height:120px;transition:border-color .2s;border-radius:8px}
 .edit-add-thumb:hover{border-color:#888}
 .page-preview-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px}
-.page-preview-overlay canvas{max-width:90vw;max-height:90vh;border-radius:8px;display:block}
+.page-preview-overlay canvas{border-radius:8px;display:block}
 .page-preview-close{position:fixed;top:20px;right:24px;color:#fff;font-size:32px;cursor:pointer;z-index:1001;width:40px;height:40px;display:flex;align-items:center;justify-content:center;line-height:1;border-radius:50%;transition:background .2s}
 .page-preview-close:hover{background:rgba(255,255,255,.1)}
 .page-preview-nav{position:fixed;top:50%;transform:translateY(-50%);color:#fff;font-size:48px;cursor:pointer;z-index:1001;width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .2s;user-select:none;line-height:1}
@@ -83,7 +83,8 @@ header .header-sub{font-size:.85rem;color:#7a7a8a;margin-top:16px;letter-spacing
 .modal-tb-icon-btn b{font-weight:800}
 .modal-tb-icon-btn svg{width:16px;height:16px;display:block}
 .modal-preview-note{position:relative;color:#fff;font-size:13px;font-weight:500;background:rgba(255,255,255,.1);padding:8px 18px;border-radius:8px;z-index:1001;pointer-events:none;max-width:90vw;text-align:center;line-height:1.5;flex-shrink:0}
-.page-editor-wrap{position:relative;display:inline-block;max-width:90vw;max-height:80vh;flex-shrink:0}
+.page-editor-wrap{position:relative;max-width:90vw;max-height:80vh;flex-shrink:0;overflow:auto;-webkit-overflow-scrolling:touch;border-radius:8px}
+.page-editor-content{position:relative;display:block}
 .page-editor-textlayer{position:absolute;inset:0;pointer-events:none}
 .page-text-box{position:absolute;pointer-events:auto;border:1px dashed transparent;padding:1px 4px;font-family:'Pretendard Variable',Pretendard,-apple-system,sans-serif;line-height:1.2;min-width:8px;min-height:1em;border-radius:2px;cursor:move}
 .page-text-box:hover{border-color:rgba(168,85,247,0.6);outline:2px solid rgba(168,85,247,0.15);outline-offset:2px}
@@ -109,7 +110,7 @@ header .header-sub{font-size:.85rem;color:#7a7a8a;margin-top:16px;letter-spacing
     .edit-sidebar{width:100%}
     /* 모달 — 캔버스 영역 보존 + 하단 시트 툴바 */
     .page-preview-overlay{padding:8px;padding-top:64px;padding-bottom:88px;gap:6px;justify-content:center}
-    .page-preview-overlay canvas{max-height:calc(100vh - 200px)}
+    .page-editor-wrap{max-height:calc(100vh - 200px)}
     .modal-text-toolbar{order:99;position:fixed;bottom:8px;left:8px;right:8px;max-width:none;background:rgba(15,15,23,0.96);backdrop-filter:blur(8px);padding:8px;border-radius:12px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;z-index:1002;justify-content:flex-start}
     .modal-tb-hint,.modal-tb-label{display:none}
     .modal-preview-note{font-size:11px;padding:6px 12px;display:none}

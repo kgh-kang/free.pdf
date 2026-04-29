@@ -651,12 +651,18 @@ async function openPageEditor(pg){
     }
 
     // ===== 4. 캔버스 wrap + 텍스트/이미지 레이어 =====
+    // wrap = 스크롤 컨테이너 (작은 화면에서 페이지가 잘리는 대신 스크롤 노출, 종횡비 보존)
+    // content = 캔버스 실제 크기. 레이어들이 inset:0 으로 캔버스에 정렬됨
     const wrap=document.createElement('div');wrap.className='page-editor-wrap';
-    wrap.appendChild(bigCanvas);
+    const content=document.createElement('div');content.className='page-editor-content';
+    content.style.width=displayVp.width+'px';
+    content.style.height=displayVp.height+'px';
+    content.appendChild(bigCanvas);
     const imageLayer=document.createElement('div');imageLayer.className='page-editor-imagelayer';
-    wrap.appendChild(imageLayer);
+    content.appendChild(imageLayer);
     const textLayer=document.createElement('div');textLayer.className='page-editor-textlayer';
-    wrap.appendChild(textLayer);
+    content.appendChild(textLayer);
+    wrap.appendChild(content);
     overlay.appendChild(wrap);
     const note=document.createElement('div');note.className='modal-preview-note';note.textContent=T.modalPreviewNote;
     overlay.appendChild(note);
