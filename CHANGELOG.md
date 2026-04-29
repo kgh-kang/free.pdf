@@ -1,5 +1,38 @@
 # Changelog
 
+## [2026-04-29] — Undo/Redo + 모바일 모달 + 이미지 회전 좌표
+
+### Undo/Redo (P0-6)
+- 50-deep snapshot 히스토리 스택 (`_history.past/future`)
+- `Cmd/Ctrl+Z` undo, `Cmd/Ctrl+Shift+Z`/`Ctrl+Y` redo
+- contenteditable/input/textarea 안에선 브라우저 native undo (텍스트 char 단위) 우선
+- 17곳 변형 직전 `pushHistory()` 와이어: 파일 추가/제거, 페이지 선택/회전/순서, 박스 추가/이동(드래그 첫 이동 시)/스타일변경/정렬/삭제, Ctrl+D 복제
+- `_history.suspended` 카운터로 빈 박스 자동 정리는 undo 대상에서 제외
+- Undo 시 모달 닫기(closeAnyOpenEditor) + workspace/dropzone 토글
+
+### 모바일 모달 적응형 (P0-7)
+- 600px 이하: 툴바를 `position:fixed` 하단 시트로, `flex-wrap:nowrap; overflow-x:auto` 가로 스크롤, `backdrop-filter:blur(8px)`
+- `order:99` 로 DOM 순서와 무관하게 시각적으로 캔버스 아래 배치
+- 44px 터치 타겟 일괄 적용: add/icon-btn/num/select/color-picker, close/nav 버튼
+- `.modal-tb-hint`, `.modal-tb-label`, `.modal-preview-note` 모바일 숨김 (공간 확보)
+- 캔버스 `max-height:calc(100vh - 200px)` — 툴바 영역 잠식 방지
+
+### 이미지 박스 회전 좌표 변환 (P1)
+- 페이지 회전 시 textBox 변환 로직과 동일하게 imageBox 좌표 변환
+- 좌상단 회전: `nx = oldH - b.y - b.h; ny = b.x`
+- 박스 폭/높이 swap, naturalW/H swap (resize aspect 정합성 유지)
+
+### 코드 정리 (P1)
+- `buildModalTextToolbar()` 추출 — openPageEditor 안의 30줄 툴바 DOM 빌드 청크 분리 (순수 함수)
+- openPageEditor 안에 8개 섹션 주석 (`===== 1. PDF 페이지 렌더 ...` 등) 추가 — 함수 길이는 유지하면서 가독성 개선
+
+### 알려진 한계
+- openPageEditor 540줄 → 본격적 리팩터(클래스화)는 별도 라운드. 현재는 섹션 주석으로 가독성만 개선
+- 이미지 박스 PDF 저장 시 회전된 페이지에서 좌표가 어긋날 가능성 (별도 이슈)
+- contenteditable 안에서 Cmd+Z는 char 단위 native undo만 — 박스 단위 undo는 blur 후
+
+---
+
 ## [2026-04-29] — 텍스트/이미지 편집 강화 + 7개 페르소나 평가 + P0 5건 적용
 
 ### 텍스트 편집 (모달 단일 진입점)

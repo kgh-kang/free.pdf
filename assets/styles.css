@@ -104,7 +104,28 @@ header .header-sub{font-size:.85rem;color:#7a7a8a;margin-top:16px;letter-spacing
 .page-image-box:hover .page-image-box-resize{display:block}
 .page-text-box.dragging .page-text-box-content{cursor:grabbing}
 @media(max-width:1400px){.edit-layout{display:flex;gap:20px}.edit-sidebar{position:static;width:220px;flex-shrink:0;max-height:none}}
-@media(max-width:600px){.edit-layout{flex-direction:column}.edit-sidebar{width:100%}.modal-text-toolbar{flex-wrap:wrap;justify-content:center}.modal-tb-hint{width:100%;text-align:center;margin:4px 0 0}}
+@media(max-width:600px){
+    .edit-layout{flex-direction:column}
+    .edit-sidebar{width:100%}
+    /* 모달 — 캔버스 영역 보존 + 하단 시트 툴바 */
+    .page-preview-overlay{padding:8px;padding-top:64px;padding-bottom:88px;gap:6px;justify-content:center}
+    .page-preview-overlay canvas{max-height:calc(100vh - 200px)}
+    .modal-text-toolbar{order:99;position:fixed;bottom:8px;left:8px;right:8px;max-width:none;background:rgba(15,15,23,0.96);backdrop-filter:blur(8px);padding:8px;border-radius:12px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;z-index:1002;justify-content:flex-start}
+    .modal-tb-hint,.modal-tb-label{display:none}
+    .modal-preview-note{font-size:11px;padding:6px 12px;display:none}
+    /* 44px 터치 타겟 */
+    .modal-tb-add-btn{min-height:44px;padding:8px 14px;font-size:14px;flex-shrink:0}
+    .modal-tb-icon-btn{width:44px;height:44px;flex-shrink:0;font-size:15px}
+    .modal-tb-icon-btn svg{width:18px;height:18px}
+    .modal-tb-num{height:44px;width:60px;font-size:14px;flex-shrink:0}
+    .modal-tb-select{height:44px;font-size:14px;flex-shrink:0;padding:8px 10px}
+    .modal-tb-color-picker{width:44px;height:44px;flex-shrink:0}
+    .modal-tb-divider{height:32px;flex-shrink:0;align-self:center}
+    .page-preview-close{top:12px;right:12px;width:44px;height:44px;font-size:28px}
+    .page-preview-nav{width:44px;height:44px;font-size:32px}
+    .page-preview-prev{left:8px}
+    .page-preview-next{right:8px}
+}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .view.active{animation:fadeIn .15s ease-out}
 .tool-title{font-size:2rem;font-weight:800;color:#fff;margin-bottom:10px;letter-spacing:-.5px}

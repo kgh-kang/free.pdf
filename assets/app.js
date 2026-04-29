@@ -159,12 +159,82 @@ async function renderPageGrid(arrayBuffer,containerId,opts={}){
 // ===== 1. PDF 편집 (합치기+나누기+삭제+추출+회전 통합) =====
 const fileColors=['#fb7185','#fb923c','#fbbf24','#a3e635','#34d399','#2dd4bf','#22d3ee','#a78bfa','#e879f9','#f472b6'];
 let editPages=[],editDragIdx=null,editSourceNames=[],editSourceFiles=[],editCancelled=new Set();
+
+// ===== Undo/Redo 히스토리 =====
+const _history={past:[],future:[],MAX:50,suspended:0};
+function snapshotState(){
+    return{
+        editPages:editPages.map(pg=>({
+            arrayBuffer:pg.arrayBuffer,
+            sourceFile:pg.sourceFile,
+            sourcePageIndex:pg.sourcePageIndex,
+            selected:pg.selected,
+            thumbCanvas:pg.thumbCanvas,
+            rotation:pg.rotation,
+            textBoxes:(pg.textBoxes||[]).map(b=>({...b})),
+            imageBoxes:(pg.imageBoxes||[]).map(b=>({...b})),
+            pageW:pg.pageW,
+            pageH:pg.pageH,
+            thumbDpr:pg.thumbDpr,
+        })),
+        editSourceNames:[...editSourceNames],
+        editSourceFiles:editSourceFiles.map(f=>({...f})),
+    };
+}
+function restoreState(snap){
+    editPages=snap.editPages.map(pg=>({...pg,textBoxes:pg.textBoxes.map(b=>({...b})),imageBoxes:pg.imageBoxes.map(b=>({...b}))}));
+    editSourceNames=[...snap.editSourceNames];
+    editSourceFiles=snap.editSourceFiles.map(f=>({...f}));
+    closeAnyOpenEditor();
+    if(editPages.length){
+        document.getElementById('editWorkspace').style.display='block';
+        document.getElementById('editDropZone').style.display='none';
+        renderEditGrid();
+    }else{
+        document.getElementById('editWorkspace').style.display='none';
+        document.getElementById('editDropZone').style.display='';
+    }
+}
+function pushHistory(){
+    if(_history.suspended>0)return;
+    _history.past.push(snapshotState());
+    if(_history.past.length>_history.MAX)_history.past.shift();
+    _history.future=[];
+}
+function undo(){
+    if(!_history.past.length)return;
+    _history.future.push(snapshotState());
+    if(_history.future.length>_history.MAX)_history.future.shift();
+    restoreState(_history.past.pop());
+}
+function redo(){
+    if(!_history.future.length)return;
+    _history.past.push(snapshotState());
+    if(_history.past.length>_history.MAX)_history.past.shift();
+    restoreState(_history.future.pop());
+}
+function clearHistory(){_history.past=[];_history.future=[]}
+function closeAnyOpenEditor(){
+    document.querySelectorAll('.page-preview-overlay').forEach(o=>o.remove());
+}
+document.addEventListener('keydown',e=>{
+    const editView=document.getElementById('view-edit');
+    if(!editView||!editView.classList.contains('active'))return;
+    if(e.target&&(e.target.isContentEditable||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
+    const cmd=e.metaKey||e.ctrlKey;
+    if(!cmd)return;
+    const k=e.key.toLowerCase();
+    if(k==='z'){e.preventDefault();if(e.shiftKey)redo();else undo()}
+    else if(k==='y'){e.preventDefault();redo()}
+});
 setupDropZone('editDropZone','editFileInput',handleEditFiles);
 setupDropZone('editAddDropZone','editAddFileInput',handleEditFiles);
 
 async function handleEditFiles(files){
     const errEl=document.getElementById('editError');
     checkLargeFiles(files,document.getElementById('view-edit'));
+    const willAdd=files.some(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
+    if(willAdd&&editPages.length)pushHistory();
     for(const f of files.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'))){
         let pdf=null;
         try{
@@ -207,6 +277,7 @@ function renderEditFileList(){
         const safeName=escapeHtml(fname)+'.pdf';
         div.innerHTML=`<span class="edit-file-dot" style="background:${color}"></span><div class="edit-file-info"><div class="edit-file-name" title="${safeName}">${safeName}</div><div class="edit-file-meta">${T.fileMeta(sizeStr,count)}</div></div><button class="edit-file-remove" title="${T.deleteTitle}" aria-label="${T.deleteTitle}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
         div.querySelector('.edit-file-info').addEventListener('click',()=>{
+            pushHistory();
             // 해당 파일 페이지를 토글 (다른 파일은 영향 없음)
             const filePages=editPages.filter(p=>p.sourceFile===fname);
             const allSel=filePages.every(p=>p.selected);
@@ -215,6 +286,7 @@ function renderEditFileList(){
         });
         div.querySelector('.edit-file-remove').addEventListener('click',e=>{
             e.stopPropagation();
+            pushHistory();
             editCancelled.add(fname);
             editPages=editPages.filter(p=>p.sourceFile!==fname);
             editSourceNames.splice(i,1);editSourceFiles.splice(i,1);
@@ -401,40 +473,14 @@ function renderThumbCanvas(pg,opts,pageIndex){
 }
 
 const MODAL_SCALE=1.5;
-async function openPageEditor(pg){
-    const opts=getStampOptionsLive();
-    if(opts.markImgOn){opts.markImgEl=await getMarkImgElement().catch(()=>null)}
-    const pdf=await pdfjsLib.getDocument({data:pg.arrayBuffer.slice(0)}).promise;
-    const page=await pdf.getPage(pg.sourcePageIndex+1);
-    const rot=pg.rotation%360;
-    // 화면 표시는 MODAL_SCALE, 실제 캔버스 픽셀은 dpr*2 boost로 선명도 확보
-    const dpr=window.devicePixelRatio||1;
-    const sharpness=Math.max(2,dpr);
-    const renderScale=MODAL_SCALE*sharpness;
-    const displayVp=page.getViewport({scale:MODAL_SCALE,rotation:rot});
-    const vp=page.getViewport({scale:renderScale,rotation:rot});
-    const bigCanvas=document.createElement('canvas');
-    bigCanvas.width=vp.width;bigCanvas.height=vp.height;
-    bigCanvas.style.width=displayVp.width+'px';
-    bigCanvas.style.height=displayVp.height+'px';
-    const ctx=bigCanvas.getContext('2d');
-    await page.render({canvasContext:ctx,viewport:vp}).promise;
-    // 페이지 렌더 끝나면 pdf.js 핸들 즉시 해제 (워커 메모리 회수)
-    try{await pdf.destroy()}catch(_){}
-    const selectedPages=editPages.filter(p=>p.selected);
-    const pageIndex=pg.selected?selectedPages.indexOf(pg):null;
-    applyStampOverlays(ctx,vp.width,vp.height,opts,renderScale,pageIndex);
 
-    const overlay=document.createElement('div');overlay.className='page-preview-overlay';
-    const closeBtn=document.createElement('span');closeBtn.className='page-preview-close';closeBtn.innerHTML='&times;';
-    overlay.appendChild(closeBtn);
-
-    // 모달 텍스트 편집 툴바 (단일 진입점)
+// 모달 편집 툴바 DOM (순수 빌더 — 클로저 의존 없음)
+function buildModalTextToolbar(addModeActive){
     const toolbar=document.createElement('div');toolbar.className='modal-text-toolbar';
     const colorOpts=T.modalColorOptions.map(o=>`<option value="${o.v}" data-swatch="${o.v}">${o.t}</option>`).join('');
     const bgOpts=T.modalBgOptions.map(o=>`<option value="${o.v}">${o.t}</option>`).join('');
     toolbar.innerHTML=`
-        <button class="modal-tb-add-btn" data-act="toggle-add">${_textOpts.addMode?T.modalAddTextActive:T.modalAddText}</button>
+        <button class="modal-tb-add-btn" data-act="toggle-add">${addModeActive?T.modalAddTextActive:T.modalAddText}</button>
         <button class="modal-tb-add-btn" data-act="add-image">${T.modalAddImage}</button>
         <span class="modal-tb-divider modal-tb-format-grp"></span>
         <input class="modal-tb-num modal-tb-format-grp" type="number" min="6" max="96" step="1" data-field="size" title="${T.modalSizeLabel}">
@@ -458,8 +504,42 @@ async function openPageEditor(pg){
         <button class="modal-tb-icon-btn modal-tb-boxalign-grp" data-boxalign="bottom" title="${T.boxAlignBottomTitle}" style="display:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="14" x2="14" y2="14"/><rect x="4" y="4" width="3" height="8"/><rect x="9" y="7" width="3" height="5"/></svg></button>
         <span class="modal-tb-hint"></span>
     `;
+    return toolbar;
+}
+
+async function openPageEditor(pg){
+    // ===== 1. PDF 페이지 렌더 (캔버스에 stamp 합성) =====
+    const opts=getStampOptionsLive();
+    if(opts.markImgOn){opts.markImgEl=await getMarkImgElement().catch(()=>null)}
+    const pdf=await pdfjsLib.getDocument({data:pg.arrayBuffer.slice(0)}).promise;
+    const page=await pdf.getPage(pg.sourcePageIndex+1);
+    const rot=pg.rotation%360;
+    // 화면 표시는 MODAL_SCALE, 실제 캔버스 픽셀은 dpr*2 boost로 선명도 확보
+    const dpr=window.devicePixelRatio||1;
+    const sharpness=Math.max(2,dpr);
+    const renderScale=MODAL_SCALE*sharpness;
+    const displayVp=page.getViewport({scale:MODAL_SCALE,rotation:rot});
+    const vp=page.getViewport({scale:renderScale,rotation:rot});
+    const bigCanvas=document.createElement('canvas');
+    bigCanvas.width=vp.width;bigCanvas.height=vp.height;
+    bigCanvas.style.width=displayVp.width+'px';
+    bigCanvas.style.height=displayVp.height+'px';
+    const ctx=bigCanvas.getContext('2d');
+    await page.render({canvasContext:ctx,viewport:vp}).promise;
+    // 페이지 렌더 끝나면 pdf.js 핸들 즉시 해제 (워커 메모리 회수)
+    try{await pdf.destroy()}catch(_){}
+    const selectedPages=editPages.filter(p=>p.selected);
+    const pageIndex=pg.selected?selectedPages.indexOf(pg):null;
+    applyStampOverlays(ctx,vp.width,vp.height,opts,renderScale,pageIndex);
+
+    // ===== 2. 모달 컨테이너 + 닫기 버튼 + 툴바 =====
+    const overlay=document.createElement('div');overlay.className='page-preview-overlay';
+    const closeBtn=document.createElement('span');closeBtn.className='page-preview-close';closeBtn.innerHTML='&times;';
+    overlay.appendChild(closeBtn);
+    const toolbar=buildModalTextToolbar(_textOpts.addMode);
     overlay.appendChild(toolbar);
 
+    // ===== 3. 박스 선택/포커스 상태 =====
     // 현재 포커스된 박스 추적 (또는 null이면 _textOpts에 적용)
     let _focusedBox=null;
     const _multiSel=new Set();  // 다중 선택된 박스들 (Shift+클릭)
@@ -537,6 +617,7 @@ async function openPageEditor(pg){
     function alignBoxes(mode){
         const boxes=Array.from(_multiSel);
         if(boxes.length<2)return;
+        pushHistory();
         const widths=boxes.map(getBoxWidth);
         const heights=boxes.map(getBoxHeight);
         const lefts=boxes.map(b=>b.x);
@@ -558,12 +639,15 @@ async function openPageEditor(pg){
     });
     function applyFieldChange(field,value){
         const targets=getActiveTargets();
+        const affectsBox=targets.some(t=>t!==_textOpts);
+        if(affectsBox)pushHistory();
         targets.forEach(t=>{
             t[field]=value;
             if(t!==_textOpts)refreshBoxDom(t);
         });
     }
 
+    // ===== 4. 캔버스 wrap + 텍스트/이미지 레이어 =====
     const wrap=document.createElement('div');wrap.className='page-editor-wrap';
     wrap.appendChild(bigCanvas);
     const imageLayer=document.createElement('div');imageLayer.className='page-editor-imagelayer';
@@ -600,6 +684,7 @@ async function openPageEditor(pg){
                     const baseW=Math.min(200,pg.pageW*0.3);
                     const ratio=img.naturalHeight/img.naturalWidth;
                     const w=baseW,h=baseW*ratio;
+                    pushHistory();
                     const ibox={id:genBoxId(),dataUrl:reader.result,x:(pg.pageW-w)/2,y:(pg.pageH-h)/2,w,h,naturalW:img.naturalWidth,naturalH:img.naturalHeight};
                     pg.imageBoxes.push(ibox);
                     _imgCache.set(reader.result,img);
@@ -647,6 +732,7 @@ async function openPageEditor(pg){
     if(!pg.textBoxes)pg.textBoxes=[];
     if(!pg.imageBoxes)pg.imageBoxes=[];
 
+    // ===== 5. 이미지 박스 DOM 빌더 + 인터랙션 =====
     function makeImageBoxEl(ibox){
         const el=document.createElement('div');
         el.className='page-image-box';
@@ -665,6 +751,7 @@ async function openPageEditor(pg){
         del.className='page-image-box-del';del.textContent='✕';del.title=T.modalImageDelTitle;
         del.addEventListener('pointerdown',e=>{
             e.preventDefault();e.stopPropagation();
+            pushHistory();
             const i=pg.imageBoxes.indexOf(ibox);if(i>=0)pg.imageBoxes.splice(i,1);
             el.remove();scheduleThumbRedraw();
         });
@@ -677,6 +764,9 @@ async function openPageEditor(pg){
             if(!drag)return;
             const dx=(e.clientX-drag.mx)/MODAL_SCALE;
             const dy=(e.clientY-drag.my)/MODAL_SCALE;
+            if(!drag.moved&&Math.hypot(dx,dy)<3)return;
+            if(!drag.moved)pushHistory();
+            drag.moved=true;
             if(drag.mode==='move'){
                 ibox.x=Math.max(0,drag.bx+dx);
                 ibox.y=Math.max(0,drag.by+dy);
@@ -696,14 +786,14 @@ async function openPageEditor(pg){
         el.addEventListener('pointerdown',e=>{
             if(e.target===del||e.target===resize)return;
             e.preventDefault();e.stopPropagation();
-            drag={mode:'move',mx:e.clientX,my:e.clientY,bx:ibox.x,by:ibox.y};
+            drag={mode:'move',mx:e.clientX,my:e.clientY,bx:ibox.x,by:ibox.y,moved:false};
             document.addEventListener('pointermove',onMove);
             document.addEventListener('pointerup',onUp);
             document.addEventListener('pointercancel',onUp);
         });
         resize.addEventListener('pointerdown',e=>{
             e.preventDefault();e.stopPropagation();
-            drag={mode:'resize',mx:e.clientX,my:e.clientY,bw:ibox.w,bh:ibox.h};
+            drag={mode:'resize',mx:e.clientX,my:e.clientY,bw:ibox.w,bh:ibox.h,moved:false};
             document.addEventListener('pointermove',onMove);
             document.addEventListener('pointerup',onUp);
             document.addEventListener('pointercancel',onUp);
@@ -711,6 +801,7 @@ async function openPageEditor(pg){
         return el;
     }
     pg.imageBoxes.forEach(b=>imageLayer.appendChild(makeImageBoxEl(b)));
+    // ===== 6. 텍스트 박스 DOM 빌더 + 인터랙션 =====
     function applyBoxStyleToEl(el,box){
         el.style.left=(box.x*MODAL_SCALE)+'px';
         el.style.top=(box.y*MODAL_SCALE)+'px';
@@ -735,6 +826,7 @@ async function openPageEditor(pg){
         del.className='page-text-box-del';del.textContent='✕';
         del.addEventListener('pointerdown',e=>{
             e.preventDefault();e.stopPropagation();
+            pushHistory();
             const i=pg.textBoxes.indexOf(box);if(i>=0)pg.textBoxes.splice(i,1);
             if(_focusedBox===box)_focusedBox=null;
             el.remove();
@@ -748,6 +840,7 @@ async function openPageEditor(pg){
             const dx=(e.clientX-drag.mx)/MODAL_SCALE;
             const dy=(e.clientY-drag.my)/MODAL_SCALE;
             if(!drag.moved&&Math.hypot(dx,dy)<3)return;
+            if(!drag.moved)pushHistory();
             drag.moved=true;el.classList.add('dragging');
             box.x=Math.max(0,drag.bx+dx);box.y=Math.max(0,drag.by+dy);
             el.style.left=(box.x*MODAL_SCALE)+'px';
@@ -817,6 +910,7 @@ async function openPageEditor(pg){
             // Ctrl/Cmd + D → 박스 복제 (오프셋 위치)
             if((e.ctrlKey||e.metaKey)&&(e.key==='d'||e.key==='D')){
                 e.preventDefault();
+                pushHistory();
                 const offset=20;
                 const newBox={id:genBoxId(),text:box.text||content.textContent,x:box.x+offset,y:box.y+offset,size:box.size,color:box.color,bold:box.bold,underline:box.underline,align:box.align,bg:box.bg};
                 pg.textBoxes.push(newBox);
@@ -829,6 +923,7 @@ async function openPageEditor(pg){
             // Ctrl/Cmd + Backspace → 박스 삭제
             if((e.ctrlKey||e.metaKey)&&(e.key==='Backspace'||e.key==='Delete')){
                 e.preventDefault();
+                pushHistory();
                 const i=pg.textBoxes.indexOf(box);if(i>=0)pg.textBoxes.splice(i,1);
                 el.remove();
                 return;
@@ -839,6 +934,7 @@ async function openPageEditor(pg){
     }
     pg.textBoxes.forEach(b=>textLayer.appendChild(makeBoxEl(b)));
 
+    // ===== 7. 캔버스 클릭 → 텍스트 박스 추가 (addMode) / 박스 선택 해제 =====
     bigCanvas.addEventListener('click',e=>{
         if(!_textOpts.addMode){
             // addMode 아닐 때: 빈 영역 클릭 = 박스 선택 해제
@@ -851,6 +947,7 @@ async function openPageEditor(pg){
         const rect=bigCanvas.getBoundingClientRect();
         const cx=(e.clientX-rect.left)/MODAL_SCALE;
         const cy=(e.clientY-rect.top)/MODAL_SCALE;
+        pushHistory();
         const box={id:genBoxId(),text:'',x:cx,y:cy,size:_textOpts.size,color:_textOpts.color,bold:_textOpts.bold,underline:_textOpts.underline,align:_textOpts.align,bg:_textOpts.bg};
         pg.textBoxes.push(box);
         const el=makeBoxEl(box);
@@ -864,18 +961,22 @@ async function openPageEditor(pg){
     });
     refreshAddBtn();
 
+    // ===== 8. 모달 닫기 + 페이지 좌우 네비게이션 =====
     function close(){
         // 모든 박스 blur (텍스트 동기화)
         textLayer.querySelectorAll('.page-text-box-content').forEach(c=>{
             if(document.activeElement===c)c.blur();
         });
-        // 빈 박스 일괄 정리
+        // 빈 박스 일괄 정리 (자동, undo 대상 아님)
         if(pg.textBoxes&&pg.textBoxes.length){
-            for(let i=pg.textBoxes.length-1;i>=0;i--){
-                if(!pg.textBoxes[i].text||!pg.textBoxes[i].text.trim()){
-                    pg.textBoxes.splice(i,1);
+            _history.suspended++;
+            try{
+                for(let i=pg.textBoxes.length-1;i>=0;i--){
+                    if(!pg.textBoxes[i].text||!pg.textBoxes[i].text.trim()){
+                        pg.textBoxes.splice(i,1);
+                    }
                 }
-            }
+            }finally{_history.suspended--}
         }
         _focusedBox=null;
         _textOpts.addMode=false;
@@ -967,13 +1068,14 @@ function renderEditGrid(){
         const num=document.createElement('div');num.className='page-thumb-num';num.textContent=(i+1)+'p';div.appendChild(num);
         div.querySelector('[data-act="rotate"]').addEventListener('click',e=>{
             e.stopPropagation();
+            pushHistory();
             // 회전 전 페이지 크기 (현재 보이는 방향 기준)
             const rotBefore=pg.rotation%360;
             const swapped=rotBefore===90||rotBefore===270;
             const oldW=swapped?pg.pageH:pg.pageW;
             const oldH=swapped?pg.pageW:pg.pageH;
             // 90° 시계방향 변환: 박스 좌상단을 점으로 취급
-            // (x, y) → (oldH - y - approxH, x), 박스 폭/높이는 size로 근사
+            // (x, y) → (oldH - y - h, x), 새 박스의 좌상단이 회전 후 어디 가는지 계산
             if(pg.textBoxes&&pg.textBoxes.length){
                 pg.textBoxes.forEach(b=>{
                     const approxH=b.size*1.2;
@@ -981,6 +1083,17 @@ function renderEditGrid(){
                     const ny=b.x;
                     b.x=Math.max(0,nx);
                     b.y=Math.max(0,ny);
+                });
+            }
+            if(pg.imageBoxes&&pg.imageBoxes.length){
+                pg.imageBoxes.forEach(b=>{
+                    const nx=oldH-b.y-b.h;
+                    const ny=b.x;
+                    b.x=Math.max(0,nx);
+                    b.y=Math.max(0,ny);
+                    // 회전 후 폭/높이 swap
+                    const tmp=b.w;b.w=b.h;b.h=tmp;
+                    if(b.naturalW&&b.naturalH){const t=b.naturalW;b.naturalW=b.naturalH;b.naturalH=t}
                 });
             }
             pg.rotation=(pg.rotation+90)%360;
@@ -992,14 +1105,14 @@ function renderEditGrid(){
             e.stopPropagation();
             openPageEditor(pg);
         });
-        function togglePageSel(){pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';div.setAttribute('aria-checked',pg.selected?'true':'false');updateEditStatus();scheduleThumbRedraw()}
+        function togglePageSel(){pushHistory();pg.selected=!pg.selected;div.classList.toggle('selected',pg.selected);div.style.borderColor=pg.selected?color:'';div.setAttribute('aria-checked',pg.selected?'true':'false');updateEditStatus();scheduleThumbRedraw()}
         div.addEventListener('click',e=>{if(e.target.closest('.page-thumb-rotate')||e.target.closest('.page-thumb-btn'))return;togglePageSel()});
         div.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();togglePageSel()}});
         div.addEventListener('dragstart',e=>{editDragIdx=i;div.classList.add('dragging-thumb');e.dataTransfer.effectAllowed='move'});
         div.addEventListener('dragend',()=>{div.classList.remove('dragging-thumb');grid.querySelectorAll('.drag-over-thumb').forEach(el=>el.classList.remove('drag-over-thumb'));editDragIdx=null});
         div.addEventListener('dragover',e=>{e.preventDefault();if(editDragIdx!==null&&editDragIdx!==i)div.classList.add('drag-over-thumb')});
         div.addEventListener('dragleave',()=>div.classList.remove('drag-over-thumb'));
-        div.addEventListener('drop',e=>{e.preventDefault();div.classList.remove('drag-over-thumb');if(editDragIdx===null||editDragIdx===i)return;const[moved]=editPages.splice(editDragIdx,1);editPages.splice(i,0,moved);editDragIdx=null;renderEditGrid()});
+        div.addEventListener('drop',e=>{e.preventDefault();div.classList.remove('drag-over-thumb');if(editDragIdx===null||editDragIdx===i)return;pushHistory();const[moved]=editPages.splice(editDragIdx,1);editPages.splice(i,0,moved);editDragIdx=null;renderEditGrid()});
         grid.appendChild(div);
     });
     const fi=document.getElementById('editInlineAddInput');
@@ -1034,6 +1147,7 @@ function updateEditStatus(){
 }
 
 document.getElementById('editSelectToggle').addEventListener('click',()=>{
+    pushHistory();
     const allSelected=editPages.every(p=>p.selected);
     editPages.forEach(p=>p.selected=!allSelected);renderEditGrid();
     document.getElementById('editSelectToggle').textContent=!allSelected?T.deselectAll:T.selectAll;
@@ -1257,6 +1371,7 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
 
 document.getElementById('editClearBtn').addEventListener('click',()=>{
     editPages=[];editSourceNames=[];editSourceFiles=[];editCancelled.clear();_imgCache.clear();
+    clearHistory();
     document.getElementById('editWorkspace').style.display='none';
     document.getElementById('editDropZone').style.display='';
     document.getElementById('editPageGrid').innerHTML='';
